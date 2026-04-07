@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "factory_ld",
+  "version": "${version}",
+  "name": "Factory_LD",
+  "description": "Healing potions",
+  "authors": [],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/factory_ld/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "fabric-datagen": [
+      "net.ledok.factory_ld.client.FactoryLdModDataGenerator"
+    ],
+    "client": [
+      "net.ledok.factory_ld.client.FactoryLdModClient"
+    ],
+    "main": [
+      "net.ledok.factory_ld.FactoryLdMod"
+    ]
+  },
+  "mixins": [
+    "factory_ld.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}

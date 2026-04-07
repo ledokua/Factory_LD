@@ -1,0 +1,21 @@
+{
+  "type": "factory_ld:constructor",
+  "recipe_name": "Cast Screws",
+  "category": "Alternate recipes",
+  "research_group": "base",
+  "item_inputs": [
+    {
+      "ingredient": {
+        "item": "minecraft:iron_ingot"
+      },
+      "count": 1
+    }
+  ],
+  "item_outputs": [
+    {
+      "id": "minecraft:iron_nugget",
+      "count": 20
+    }
+  ],
+  "craft_time": 80
+}
