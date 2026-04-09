@@ -3,6 +3,7 @@ package net.ledok.factory_ld.registry;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.ledok.factory_ld.world.player.PlayerOverclockAccess;
 import net.ledok.factory_ld.world.research.ResearchManager;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -42,6 +43,22 @@ public final class ModCommands {
         dispatcher.register(
             Commands.literal("factoryld")
                 .requires(source -> source.hasPermission(2))
+                .then(Commands.literal("overclock")
+                    .then(Commands.literal("unlock")
+                        .then(Commands.argument("targets", EntityArgument.players())
+                            .executes(context -> setOverclockUnlocked(
+                                context.getSource(),
+                                EntityArgument.getPlayers(context, "targets"),
+                                true
+                            ))))
+                    .then(Commands.literal("lock")
+                        .then(Commands.argument("targets", EntityArgument.players())
+                            .executes(context -> setOverclockUnlocked(
+                                context.getSource(),
+                                EntityArgument.getPlayers(context, "targets"),
+                                false
+                            ))))
+                )
                 .then(Commands.literal("research")
                     .then(Commands.literal("unlock")
                         .then(Commands.argument("targets", EntityArgument.players())
@@ -164,5 +181,14 @@ public final class ModCommands {
             source.sendFailure(Component.literal("Unknown recipe: " + recipeId));
             throw CommandSyntaxException.BUILT_IN_EXCEPTIONS.dispatcherUnknownArgument().create();
         }
+    }
+
+    private static int setOverclockUnlocked(CommandSourceStack source, java.util.Collection<ServerPlayer> players, boolean unlocked) {
+        for (ServerPlayer player : players) {
+            PlayerOverclockAccess.setUnlocked(player, unlocked);
+        }
+        String state = unlocked ? "unlocked" : "locked";
+        source.sendSuccess(() -> Component.literal("Overclock " + state + " for " + players.size() + " player(s)."), true);
+        return players.size();
     }
 }

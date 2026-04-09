@@ -3,11 +3,11 @@ package net.ledok.factory_ld.world.research;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 import net.ledok.factory_ld.config.FactoryLdConfig;
 import net.ledok.factory_ld.FactoryLdMod;
+import net.ledok.factory_ld.world.recipe.ConstructorRecipe;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -29,7 +29,18 @@ public final class ResearchManager {
             return true;
         }
         Set<String> playerSet = data.getPlayerUnlocked().get(player.getUUID());
-        return playerSet != null && playerSet.contains(recipeId.toString());
+        if (playerSet != null && playerSet.contains(recipeId.toString())) {
+            return true;
+        }
+        Optional<String> group = getRecipeGroup(level, recipeId);
+        if (group.isEmpty()) {
+            return false;
+        }
+        if (data.getGlobalUnlockedGroups().contains(group.get())) {
+            return true;
+        }
+        Set<String> playerGroups = data.getPlayerUnlockedGroups().get(player.getUUID());
+        return playerGroups != null && playerGroups.contains(group.get());
     }
 
     public static Set<ResourceLocation> getUnlocked(ServerLevel level, ServerPlayer player) {
@@ -42,6 +53,16 @@ public final class ResearchManager {
         if (playerSet != null) {
             for (String id : playerSet) {
                 Optional.ofNullable(ResourceLocation.tryParse(id)).ifPresent(result::add);
+            }
+        }
+        Set<String> unlockedGroups = new HashSet<>(data.getGlobalUnlockedGroups());
+        Set<String> playerGroups = data.getPlayerUnlockedGroups().get(player.getUUID());
+        if (playerGroups != null) {
+            unlockedGroups.addAll(playerGroups);
+        }
+        if (!unlockedGroups.isEmpty()) {
+            for (ResourceLocation id : getRecipesByAnyGroup(level, unlockedGroups)) {
+                result.add(id);
             }
         }
         return result;
@@ -81,31 +102,33 @@ public final class ResearchManager {
     }
 
     public static Set<String> getAllGroups(ServerLevel level) {
-        return level.getRecipeManager().getAllRecipesFor(net.ledok.factory_ld.registry.ModRecipes.CONSTRUCTOR_TYPE)
-            .stream()
+        return allRecipes(level)
             .map(RecipeHolder::value)
-            .map(net.ledok.factory_ld.world.recipe.ConstructorRecipe::getResearchGroup)
+            .filter(ConstructorRecipe.class::isInstance)
+            .map(ConstructorRecipe.class::cast)
+            .map(ConstructorRecipe::getResearchGroup)
             .collect(Collectors.toSet());
     }
 
     public static Set<ResourceLocation> getRecipesByGroup(ServerLevel level, String group) {
-        return level.getRecipeManager().getAllRecipesFor(net.ledok.factory_ld.registry.ModRecipes.CONSTRUCTOR_TYPE)
-            .stream()
-            .filter(entry -> entry.value().getResearchGroup().equals(group))
+        return allRecipes(level)
+            .filter(entry -> entry.value() instanceof ConstructorRecipe recipe && recipe.getResearchGroup().equals(group))
             .map(RecipeHolder::id)
             .collect(Collectors.toSet());
     }
 
     public static void unlockGroupGlobal(ServerLevel level, String group) {
         ResearchSavedData data = get(level);
-        for (ResourceLocation id : getRecipesByGroup(level, group)) {
-            data.getGlobalUnlocked().add(id.toString());
+        if (data.getGlobalUnlockedGroups().add(group)) {
+            data.setDirty();
         }
-        data.setDirty();
     }
 
     public static void lockGroupGlobal(ServerLevel level, String group) {
         ResearchSavedData data = get(level);
+        if (data.getGlobalUnlockedGroups().remove(group)) {
+            data.setDirty();
+        }
         for (ResourceLocation id : getRecipesByGroup(level, group)) {
             data.getGlobalUnlocked().remove(id.toString());
         }
@@ -114,26 +137,33 @@ public final class ResearchManager {
 
     public static void unlockGroupPlayer(ServerLevel level, ServerPlayer player, String group) {
         ResearchSavedData data = get(level);
-        Set<String> set = data.getPlayerUnlocked().computeIfAbsent(player.getUUID(), key -> new HashSet<>());
-        for (ResourceLocation id : getRecipesByGroup(level, group)) {
-            set.add(id.toString());
+        Set<String> groups = data.getPlayerUnlockedGroups().computeIfAbsent(player.getUUID(), key -> new HashSet<>());
+        if (groups.add(group)) {
+            data.setDirty();
         }
-        data.setDirty();
     }
 
     public static void lockGroupPlayer(ServerLevel level, ServerPlayer player, String group) {
         ResearchSavedData data = get(level);
+        Set<String> groups = data.getPlayerUnlockedGroups().get(player.getUUID());
+        if (groups != null && groups.remove(group)) {
+            if (groups.isEmpty()) {
+                data.getPlayerUnlockedGroups().remove(player.getUUID());
+            }
+            data.setDirty();
+        }
         Set<String> set = data.getPlayerUnlocked().get(player.getUUID());
-        if (set == null) {
-            return;
-        }
         for (ResourceLocation id : getRecipesByGroup(level, group)) {
-            set.remove(id.toString());
+            if (set != null) {
+                set.remove(id.toString());
+            }
         }
-        if (set.isEmpty()) {
+        if (set != null && set.isEmpty()) {
             data.getPlayerUnlocked().remove(player.getUUID());
         }
-        data.setDirty();
+        if (set != null) {
+            data.setDirty();
+        }
     }
 
     private static void ensureDefaults(ServerLevel level, ResearchSavedData data) {
@@ -142,13 +172,39 @@ public final class ResearchManager {
         }
         FactoryLdConfig config = FactoryLdConfig.load();
         for (String group : config.defaultUnlockedGroups()) {
-            for (ResourceLocation id : getRecipesByGroup(level, group)) {
-                data.getGlobalUnlocked().add(id.toString());
-            }
+            data.getGlobalUnlockedGroups().add(group);
         }
-        if (data.getGlobalUnlocked().isEmpty()) {
+        if (data.getGlobalUnlocked().isEmpty() && data.getGlobalUnlockedGroups().isEmpty()) {
             data.getGlobalUnlocked().add(FactoryLdMod.id("constructor_iron_plates").toString());
         }
         data.setDirty();
+    }
+
+    private static java.util.stream.Stream<RecipeHolder<?>> allRecipes(ServerLevel level) {
+        return level.getRecipeManager().getRecipeIds()
+            .map(level.getRecipeManager()::byKey)
+            .flatMap(Optional::stream)
+            .map(holder -> (RecipeHolder<?>)holder);
+    }
+
+    private static Optional<String> getRecipeGroup(ServerLevel level, ResourceLocation recipeId) {
+        Optional<RecipeHolder<?>> holder = level.getRecipeManager().byKey(recipeId);
+        if (holder.isEmpty()) {
+            return Optional.empty();
+        }
+        if (holder.get().value() instanceof ConstructorRecipe recipe) {
+            return Optional.of(recipe.getResearchGroup());
+        }
+        return Optional.empty();
+    }
+
+    private static Set<ResourceLocation> getRecipesByAnyGroup(ServerLevel level, Set<String> groups) {
+        if (groups.isEmpty()) {
+            return Set.of();
+        }
+        return allRecipes(level)
+            .filter(entry -> entry.value() instanceof ConstructorRecipe recipe && groups.contains(recipe.getResearchGroup()))
+            .map(RecipeHolder::id)
+            .collect(Collectors.toSet());
     }
 }

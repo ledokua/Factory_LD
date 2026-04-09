@@ -8,7 +8,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.resources.ResourceLocation;
 
-public record ConstructorScreenData(BlockPos pos, List<ResourceLocation> unlockedRecipes) {
+public record ConstructorScreenData(BlockPos pos, List<ResourceLocation> unlockedRecipes, boolean overclockUnlocked) {
     public static final StreamCodec<RegistryFriendlyByteBuf, ConstructorScreenData> STREAM_CODEC =
         StreamCodec.of(ConstructorScreenData::encode, ConstructorScreenData::decode);
 
@@ -19,7 +19,8 @@ public record ConstructorScreenData(BlockPos pos, List<ResourceLocation> unlocke
         for (int i = 0; i < size; i++) {
             unlocked.add(ResourceLocation.STREAM_CODEC.decode(buf));
         }
-        return new ConstructorScreenData(pos, unlocked);
+        boolean overclockUnlocked = buf.readBoolean();
+        return new ConstructorScreenData(pos, unlocked, overclockUnlocked);
     }
 
     private static void encode(RegistryFriendlyByteBuf buf, ConstructorScreenData data) {
@@ -28,5 +29,6 @@ public record ConstructorScreenData(BlockPos pos, List<ResourceLocation> unlocke
         for (ResourceLocation id : data.unlockedRecipes) {
             ResourceLocation.STREAM_CODEC.encode(buf, id);
         }
+        buf.writeBoolean(data.overclockUnlocked);
     }
 }

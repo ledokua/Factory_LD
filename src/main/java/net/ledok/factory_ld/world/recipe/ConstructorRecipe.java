@@ -15,14 +15,24 @@ import net.minecraft.world.level.Level;
 
 public class ConstructorRecipe implements Recipe<RecipeInput> {
     private final String recipeName;
+    private final String recipeNameKey;
     private final String category;
     private final String researchGroup;
     private final List<InputEntry> itemInputs;
     private final List<ItemStack> itemOutputs;
     private final int craftTime;
 
-    public ConstructorRecipe(String recipeName, String category, String researchGroup, List<InputEntry> itemInputs, List<ItemStack> itemOutputs, int craftTime) {
+    public ConstructorRecipe(
+        String recipeName,
+        String recipeNameKey,
+        String category,
+        String researchGroup,
+        List<InputEntry> itemInputs,
+        List<ItemStack> itemOutputs,
+        int craftTime
+    ) {
         this.recipeName = recipeName;
+        this.recipeNameKey = recipeNameKey == null ? "" : recipeNameKey;
         this.category = category;
         this.researchGroup = researchGroup;
         this.itemInputs = itemInputs;
@@ -32,6 +42,10 @@ public class ConstructorRecipe implements Recipe<RecipeInput> {
 
     public String getRecipeName() {
         return recipeName;
+    }
+
+    public String getRecipeNameKey() {
+        return recipeNameKey;
     }
 
     public String getCategory() {

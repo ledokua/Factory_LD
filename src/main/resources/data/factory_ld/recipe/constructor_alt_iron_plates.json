@@ -1,22 +1,21 @@
 {
   "type": "factory_ld:constructor",
-  "recipe_name": "Iron Plates",
-  "recipe_name_key": "recipe.factory_ld.constructor.iron_plates",
+  "recipe_name": "Bulk Iron Plates",
   "category": "Standart Parts",
-  "research_group": "base",
+  "research_group": "T1",
   "item_inputs": [
     {
       "ingredient": {
         "item": "minecraft:iron_ingot"
       },
-      "count": 1
+      "count": 4
     }
   ],
   "item_outputs": [
     {
-      "id": "minecraft:iron_bars",
+      "id": "minecraft:netherite_upgrade_smithing_template",
       "count": 2
     }
   ],
-  "craft_time": 120
+  "craft_time": 300
 }

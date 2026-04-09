@@ -21,6 +21,7 @@ public class ConstructorRecipeSerializer implements RecipeSerializer<Constructor
     private static final MapCodec<ConstructorRecipe> CODEC = RecordCodecBuilder.mapCodec(instance ->
         instance.group(
             Codec.STRING.fieldOf("recipe_name").forGetter(ConstructorRecipe::getRecipeName),
+            Codec.STRING.optionalFieldOf("recipe_name_key", "").forGetter(ConstructorRecipe::getRecipeNameKey),
             Codec.STRING.fieldOf("category").forGetter(ConstructorRecipe::getCategory),
             Codec.STRING.fieldOf("research_group").forGetter(ConstructorRecipe::getResearchGroup),
             INPUT_ENTRY_CODEC.listOf().fieldOf("item_inputs").forGetter(ConstructorRecipe::getItemInputs),
@@ -44,6 +45,7 @@ public class ConstructorRecipeSerializer implements RecipeSerializer<Constructor
 
     private static ConstructorRecipe fromNetwork(RegistryFriendlyByteBuf buf) {
         String name = buf.readUtf();
+        String nameKey = buf.readUtf();
         String category = buf.readUtf();
         String researchGroup = buf.readUtf();
         int inputSize = buf.readVarInt();
@@ -59,11 +61,12 @@ public class ConstructorRecipeSerializer implements RecipeSerializer<Constructor
             outputs.add(ItemStack.STREAM_CODEC.decode(buf));
         }
         int craftTime = buf.readVarInt();
-        return new ConstructorRecipe(name, category, researchGroup, inputs, outputs, craftTime);
+        return new ConstructorRecipe(name, nameKey, category, researchGroup, inputs, outputs, craftTime);
     }
 
     private static void toNetwork(RegistryFriendlyByteBuf buf, ConstructorRecipe recipe) {
         buf.writeUtf(recipe.getRecipeName());
+        buf.writeUtf(recipe.getRecipeNameKey());
         buf.writeUtf(recipe.getCategory());
         buf.writeUtf(recipe.getResearchGroup());
         List<ConstructorRecipe.InputEntry> inputs = recipe.getItemInputs();
@@ -82,6 +85,7 @@ public class ConstructorRecipeSerializer implements RecipeSerializer<Constructor
 
     private static ConstructorRecipe fromCodec(
         String recipeName,
+        String recipeNameKey,
         String category,
         String researchGroup,
         List<ConstructorRecipe.InputEntry> itemInputs,
@@ -90,10 +94,10 @@ public class ConstructorRecipeSerializer implements RecipeSerializer<Constructor
     ) {
         List<ConstructorRecipe.InputEntry> inputs = itemInputs;
         List<ItemStack> outputs = itemOutputs;
-        if (inputs.size() != 1 || outputs.size() != 1) {
-            throw new IllegalStateException("Constructor recipes must define exactly 1 input and 1 output.");
+        if (inputs.isEmpty() || outputs.isEmpty()) {
+            throw new IllegalStateException("Constructor recipes must define at least 1 input and 1 output.");
         }
 
-        return new ConstructorRecipe(recipeName, category, researchGroup, inputs, outputs, craftTime);
+        return new ConstructorRecipe(recipeName, recipeNameKey, category, researchGroup, inputs, outputs, craftTime);
     }
 }

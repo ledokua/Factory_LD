@@ -1,13 +1,18 @@
 {
-  "type": "factory_ld:constructor",
-  "recipe_name": "Iron Plates",
-  "recipe_name_key": "recipe.factory_ld.constructor.iron_plates",
+  "type": "factory_ld:assembler",
+  "recipe_name": "Test Plates 1",
   "category": "Standart Parts",
   "research_group": "base",
   "item_inputs": [
     {
       "ingredient": {
-        "item": "minecraft:iron_ingot"
+        "item": "minecraft:gold_ingot"
+      },
+      "count": 2
+    },
+    {
+      "ingredient": {
+        "item": "minecraft:diamond"
       },
       "count": 1
     }
@@ -15,7 +20,7 @@
   "item_outputs": [
     {
       "id": "minecraft:iron_bars",
-      "count": 2
+      "count": 5
     }
   ],
   "craft_time": 120

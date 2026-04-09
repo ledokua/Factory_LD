@@ -17,10 +17,14 @@ import net.minecraft.world.level.saveddata.SavedData;
 public class ResearchSavedData extends SavedData {
     public static final String FILE_ID = "factory_ld_research";
     private static final String TAG_GLOBAL = "Global";
+    private static final String TAG_GLOBAL_GROUPS = "GlobalGroups";
     private static final String TAG_PLAYERS = "Players";
+    private static final String TAG_PLAYER_GROUPS = "PlayerGroups";
 
     private final Set<String> globalUnlocked = new HashSet<>();
+    private final Set<String> globalUnlockedGroups = new HashSet<>();
     private final Map<UUID, Set<String>> playerUnlocked = new HashMap<>();
+    private final Map<UUID, Set<String>> playerUnlockedGroups = new HashMap<>();
 
     public static SavedData.Factory<ResearchSavedData> factory() {
         return new SavedData.Factory<>(ResearchSavedData::new, ResearchSavedData::load, DataFixTypes.SAVED_DATA_COMMAND_STORAGE);
@@ -35,6 +39,10 @@ public class ResearchSavedData extends SavedData {
         for (int i = 0; i < global.size(); i++) {
             data.globalUnlocked.add(global.getString(i));
         }
+        ListTag globalGroups = tag.getList(TAG_GLOBAL_GROUPS, Tag.TAG_STRING);
+        for (int i = 0; i < globalGroups.size(); i++) {
+            data.globalUnlockedGroups.add(globalGroups.getString(i));
+        }
 
         CompoundTag players = tag.getCompound(TAG_PLAYERS);
         for (String key : players.getAllKeys()) {
@@ -46,6 +54,17 @@ public class ResearchSavedData extends SavedData {
             }
             data.playerUnlocked.put(uuid, recipes);
         }
+
+        CompoundTag playerGroups = tag.getCompound(TAG_PLAYER_GROUPS);
+        for (String key : playerGroups.getAllKeys()) {
+            UUID uuid = UUID.fromString(key);
+            ListTag list = playerGroups.getList(key, Tag.TAG_STRING);
+            Set<String> groups = new HashSet<>();
+            for (int i = 0; i < list.size(); i++) {
+                groups.add(list.getString(i));
+            }
+            data.playerUnlockedGroups.put(uuid, groups);
+        }
         return data;
     }
 
@@ -56,6 +75,11 @@ public class ResearchSavedData extends SavedData {
             global.add(StringTag.valueOf(id));
         }
         tag.put(TAG_GLOBAL, global);
+        ListTag globalGroups = new ListTag();
+        for (String group : globalUnlockedGroups) {
+            globalGroups.add(StringTag.valueOf(group));
+        }
+        tag.put(TAG_GLOBAL_GROUPS, globalGroups);
 
         CompoundTag players = new CompoundTag();
         for (Map.Entry<UUID, Set<String>> entry : playerUnlocked.entrySet()) {
@@ -66,6 +90,16 @@ public class ResearchSavedData extends SavedData {
             players.put(entry.getKey().toString(), list);
         }
         tag.put(TAG_PLAYERS, players);
+
+        CompoundTag playerGroups = new CompoundTag();
+        for (Map.Entry<UUID, Set<String>> entry : playerUnlockedGroups.entrySet()) {
+            ListTag list = new ListTag();
+            for (String group : entry.getValue()) {
+                list.add(StringTag.valueOf(group));
+            }
+            playerGroups.put(entry.getKey().toString(), list);
+        }
+        tag.put(TAG_PLAYER_GROUPS, playerGroups);
         return tag;
     }
 
@@ -73,7 +107,15 @@ public class ResearchSavedData extends SavedData {
         return globalUnlocked;
     }
 
+    public Set<String> getGlobalUnlockedGroups() {
+        return globalUnlockedGroups;
+    }
+
     public Map<UUID, Set<String>> getPlayerUnlocked() {
         return playerUnlocked;
+    }
+
+    public Map<UUID, Set<String>> getPlayerUnlockedGroups() {
+        return playerUnlockedGroups;
     }
 }

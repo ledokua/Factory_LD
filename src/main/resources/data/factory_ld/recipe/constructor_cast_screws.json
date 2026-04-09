@@ -1,6 +1,7 @@
 {
   "type": "factory_ld:constructor",
   "recipe_name": "Cast Screws",
+  "recipe_name_key": "recipe.factory_ld.constructor.cast_screws",
   "category": "Alternate recipes",
   "research_group": "base",
   "item_inputs": [
