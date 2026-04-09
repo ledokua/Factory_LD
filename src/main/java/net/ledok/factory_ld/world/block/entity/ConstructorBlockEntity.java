@@ -7,7 +7,6 @@ import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
 import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
 import net.fabricmc.fabric.api.transfer.v1.storage.base.CombinedStorage;
 import net.fabricmc.fabric.api.transfer.v1.storage.base.SingleVariantStorage;
-import net.ledok.factory_ld.inventory.ImplementedInventory;
 import net.ledok.factory_ld.registry.ModBlockEntities;
 import net.ledok.factory_ld.world.recipe.ConstructorRecipe;
 import net.ledok.factory_ld.world.player.PlayerOverclockAccess;
@@ -36,10 +35,9 @@ import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.core.Direction;
 import net.minecraft.world.WorldlyContainer;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
-public class ConstructorBlockEntity extends BlockEntity implements ImplementedInventory, WorldlyContainer, OverclockMachineEntity, ExtendedScreenHandlerFactory<ConstructorScreenData> {
+public class ConstructorBlockEntity extends AbstractMachineBlockEntity implements WorldlyContainer, ExtendedScreenHandlerFactory<ConstructorScreenData> {
     public static final int INPUT_SLOT = 0;
     public static final int OUTPUT_SLOT = 1;
     public static final int SHARD_SLOT_START = 2;
@@ -51,7 +49,6 @@ public class ConstructorBlockEntity extends BlockEntity implements ImplementedIn
     private static final long FLUID_INPUT_CAPACITY = 0;
     private static final long FLUID_OUTPUT_CAPACITY = 0;
 
-    private final NonNullList<ItemStack> items = NonNullList.withSize(SLOT_COUNT, ItemStack.EMPTY);
     private static final int[] SIDED_SLOTS = new int[] {
         INPUT_SLOT,
         OUTPUT_SLOT,
@@ -59,10 +56,6 @@ public class ConstructorBlockEntity extends BlockEntity implements ImplementedIn
         SHARD_SLOT_START + 1,
         SHARD_SLOT_START + 2
     };
-    private ResourceLocation selectedRecipeId;
-    private double progress;
-    private double clockSpeedPercent = 100.0;
-    private double energyStored;
 
     private final SingleVariantStorage<FluidVariant> inputTank = new SingleVariantStorage<>() {
         @Override
@@ -109,13 +102,7 @@ public class ConstructorBlockEntity extends BlockEntity implements ImplementedIn
     };
 
     public ConstructorBlockEntity(BlockPos pos, BlockState state) {
-        super(ModBlockEntities.CONSTRUCTOR, pos, state);
-        this.energyStored = ENERGY_CAPACITY_MJ;
-    }
-
-    @Override
-    public NonNullList<ItemStack> getItems() {
-        return items;
+        super(ModBlockEntities.CONSTRUCTOR, pos, state, SLOT_COUNT, BASE_POWER_MW, ENERGY_CAPACITY_MJ);
     }
 
     @Override
@@ -134,7 +121,7 @@ public class ConstructorBlockEntity extends BlockEntity implements ImplementedIn
         if (!stack.isEmpty() && !canPlaceItem(slot, stack)) {
             return;
         }
-        ImplementedInventory.super.setItem(slot, stack);
+        setMachineItem(slot, stack);
     }
 
     @Override
@@ -162,20 +149,6 @@ public class ConstructorBlockEntity extends BlockEntity implements ImplementedIn
         return SHARD_SLOT_COUNT;
     }
 
-    @Override
-    public boolean stillValid(Player player) {
-        return Container.stillValidBlockEntity(this, player);
-    }
-
-    @Override
-    public void setChanged() {
-        super.setChanged();
-        clampClockSpeed();
-        if (level != null) {
-            level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
-        }
-    }
-
     public Optional<ConstructorRecipe> getSelectedRecipe() {
         if (level == null || selectedRecipeId == null) {
             return Optional.empty();
@@ -190,23 +163,15 @@ public class ConstructorBlockEntity extends BlockEntity implements ImplementedIn
         return Optional.empty();
     }
 
-    public ResourceLocation getSelectedRecipeId() {
-        return selectedRecipeId;
+    @Override
+    protected boolean isRecipeIdValid(ResourceLocation id) {
+        Optional<RecipeHolder<?>> entry = level == null ? Optional.empty() : level.getRecipeManager().byKey(id);
+        return entry.isPresent() && entry.get().value() instanceof ConstructorRecipe;
     }
 
-    public void setSelectedRecipeId(ResourceLocation id) {
-        if (id != null) {
-            Optional<RecipeHolder<?>> entry = level == null ? Optional.empty() : level.getRecipeManager().byKey(id);
-            if (entry.isEmpty() || !(entry.get().value() instanceof ConstructorRecipe)) {
-                id = null;
-            }
-        }
-        if ((selectedRecipeId == null && id == null) || (selectedRecipeId != null && selectedRecipeId.equals(id))) {
-            return;
-        }
-        selectedRecipeId = id;
+    @Override
+    protected void onRecipeChanged() {
         enforceInventoryValidity();
-        setChanged();
     }
 
     public boolean isValidInput(ItemStack stack) {
@@ -219,64 +184,6 @@ public class ConstructorBlockEntity extends BlockEntity implements ImplementedIn
 
     public boolean isValidShard(ItemStack stack) {
         return !stack.isEmpty() && stack.is(Items.AMETHYST_SHARD);
-    }
-
-    public int getShardCount() {
-        int count = 0;
-        for (int slot = SHARD_SLOT_START; slot < SHARD_SLOT_START + SHARD_SLOT_COUNT; slot++) {
-            if (!items.get(slot).isEmpty()) {
-                count++;
-            }
-        }
-        return count;
-    }
-
-    public double getMaxClockSpeedPercent() {
-        double max = 100.0 + 50.0 * getShardCount();
-        return Math.min(250.0, max);
-    }
-
-    public double getClockSpeedPercent() {
-        return clockSpeedPercent;
-    }
-
-    public double getProgress() {
-        return progress;
-    }
-
-    public void setClockSpeedPercent(double percent) {
-        double clamped = clampClockSpeedPercent(percent);
-        if (Math.abs(clamped - clockSpeedPercent) < 0.0001) {
-            return;
-        }
-        clockSpeedPercent = clamped;
-        setChanged();
-    }
-
-    public double getEnergyStored() {
-        return energyStored;
-    }
-
-    public double getEnergyCapacity() {
-        return ENERGY_CAPACITY_MJ;
-    }
-
-    public double addEnergy(double amountMj) {
-        if (amountMj <= 0.0) {
-            return 0.0;
-        }
-        double accepted = Math.min(amountMj, ENERGY_CAPACITY_MJ - energyStored);
-        if (accepted <= 0.0) {
-            return 0.0;
-        }
-        energyStored += accepted;
-        setChanged();
-        return accepted;
-    }
-
-    public double getPowerUsageMw() {
-        double speed = clockSpeedPercent / 100.0;
-        return BASE_POWER_MW * Math.pow(speed, 1.321928);
     }
 
     public Storage<FluidVariant> getFluidStorage() {
@@ -392,22 +299,7 @@ public class ConstructorBlockEntity extends BlockEntity implements ImplementedIn
     protected void loadAdditional(CompoundTag nbt, HolderLookup.Provider provider) {
         super.loadAdditional(nbt, provider);
         ContainerHelper.loadAllItems(nbt, items, provider);
-        if (nbt.contains("SelectedRecipe")) {
-            selectedRecipeId = ResourceLocation.tryParse(nbt.getString("SelectedRecipe"));
-        } else {
-            selectedRecipeId = null;
-        }
-        progress = nbt.getDouble("Progress");
-        if (nbt.contains("ClockSpeed")) {
-            clockSpeedPercent = nbt.getDouble("ClockSpeed");
-        } else {
-            clockSpeedPercent = 100.0;
-        }
-        if (nbt.contains("EnergyStored")) {
-            energyStored = nbt.getDouble("EnergyStored");
-        } else {
-            energyStored = ENERGY_CAPACITY_MJ;
-        }
+        loadMachineData(nbt);
         readTank(nbt, "InputFluid", inputTank);
         readTank(nbt, "OutputFluid", outputTank);
     }
@@ -416,12 +308,7 @@ public class ConstructorBlockEntity extends BlockEntity implements ImplementedIn
     protected void saveAdditional(CompoundTag nbt, HolderLookup.Provider provider) {
         super.saveAdditional(nbt, provider);
         ContainerHelper.saveAllItems(nbt, items, provider);
-        if (selectedRecipeId != null) {
-            nbt.putString("SelectedRecipe", selectedRecipeId.toString());
-        }
-        nbt.putDouble("Progress", progress);
-        nbt.putDouble("ClockSpeed", clockSpeedPercent);
-        nbt.putDouble("EnergyStored", energyStored);
+        saveMachineData(nbt);
         writeTank(nbt, "InputFluid", inputTank);
         writeTank(nbt, "OutputFluid", outputTank);
     }
@@ -456,26 +343,6 @@ public class ConstructorBlockEntity extends BlockEntity implements ImplementedIn
     @Override
     public AbstractContainerMenu createMenu(int syncId, Inventory playerInventory, Player player) {
         return new ConstructorScreenHandler(syncId, playerInventory, this);
-    }
-
-    private void clampClockSpeed() {
-        double clamped = clampClockSpeedPercent(clockSpeedPercent);
-        if (Math.abs(clamped - clockSpeedPercent) > 0.0001) {
-            clockSpeedPercent = clamped;
-        }
-    }
-
-    private double clampClockSpeedPercent(double percent) {
-        double rounded = Math.round(percent * 10000.0) / 10000.0;
-        double min = 1.0;
-        double max = getMaxClockSpeedPercent();
-        if (rounded < min) {
-            return min;
-        }
-        if (rounded > max) {
-            return max;
-        }
-        return rounded;
     }
 
     private static void readTank(CompoundTag root, String key, SingleVariantStorage<FluidVariant> tank) {
