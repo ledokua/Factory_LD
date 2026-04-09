@@ -43,7 +43,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluid;
 
-public class RefineryBlockEntity extends BlockEntity implements ImplementedInventory, WorldlyContainer, ExtendedScreenHandlerFactory<RefineryScreenData> {
+public class RefineryBlockEntity extends BlockEntity implements ImplementedInventory, WorldlyContainer, OverclockMachineEntity, ExtendedScreenHandlerFactory<RefineryScreenData> {
     public static final int INPUT_SLOT = 0;
     public static final int OUTPUT_SLOT = 1;
     public static final int SHARD_SLOT_START = 2;
@@ -152,12 +152,22 @@ public class RefineryBlockEntity extends BlockEntity implements ImplementedInven
 
     @Override
     public boolean canPlaceItemThroughFace(int slot, ItemStack stack, Direction side) {
-        return canPlaceItem(slot, stack);
+        return slot == INPUT_SLOT && canPlaceItem(slot, stack);
     }
 
     @Override
     public boolean canTakeItemThroughFace(int slot, ItemStack stack, Direction side) {
         return slot == OUTPUT_SLOT;
+    }
+
+    @Override
+    public int getShardSlotStart() {
+        return SHARD_SLOT_START;
+    }
+
+    @Override
+    public int getShardSlotCount() {
+        return SHARD_SLOT_COUNT;
     }
 
     @Override

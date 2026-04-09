@@ -40,7 +40,7 @@ import net.minecraft.world.WorldlyContainer;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
-public class AssemblerBlockEntity extends BlockEntity implements ImplementedInventory, WorldlyContainer, ExtendedScreenHandlerFactory<AssemblerScreenData> {
+public class AssemblerBlockEntity extends BlockEntity implements ImplementedInventory, WorldlyContainer, OverclockMachineEntity, ExtendedScreenHandlerFactory<AssemblerScreenData> {
     public static final int INPUT_SLOT_1 = 0;
     public static final int INPUT_SLOT_2 = 1;
     public static final int OUTPUT_SLOT = 2;
@@ -147,12 +147,22 @@ public class AssemblerBlockEntity extends BlockEntity implements ImplementedInve
 
     @Override
     public boolean canPlaceItemThroughFace(int slot, ItemStack stack, Direction side) {
-        return canPlaceItem(slot, stack);
+        return (slot == INPUT_SLOT_1 || slot == INPUT_SLOT_2) && canPlaceItem(slot, stack);
     }
 
     @Override
     public boolean canTakeItemThroughFace(int slot, ItemStack stack, Direction side) {
         return slot == OUTPUT_SLOT;
+    }
+
+    @Override
+    public int getShardSlotStart() {
+        return SHARD_SLOT_START;
+    }
+
+    @Override
+    public int getShardSlotCount() {
+        return SHARD_SLOT_COUNT;
     }
 
     @Override
