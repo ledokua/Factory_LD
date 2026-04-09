@@ -37,11 +37,13 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.core.Direction;
+import net.minecraft.world.WorldlyContainer;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluid;
 
-public class RefineryBlockEntity extends BlockEntity implements ImplementedInventory, ExtendedScreenHandlerFactory<RefineryScreenData> {
+public class RefineryBlockEntity extends BlockEntity implements ImplementedInventory, WorldlyContainer, ExtendedScreenHandlerFactory<RefineryScreenData> {
     public static final int INPUT_SLOT = 0;
     public static final int OUTPUT_SLOT = 1;
     public static final int SHARD_SLOT_START = 2;
@@ -53,6 +55,13 @@ public class RefineryBlockEntity extends BlockEntity implements ImplementedInven
     private static final long TANK_CAPACITY = FluidConstants.BUCKET * 50L;
 
     private final NonNullList<ItemStack> items = NonNullList.withSize(SLOT_COUNT, ItemStack.EMPTY);
+    private static final int[] SIDED_SLOTS = new int[] {
+        INPUT_SLOT,
+        OUTPUT_SLOT,
+        SHARD_SLOT_START,
+        SHARD_SLOT_START + 1,
+        SHARD_SLOT_START + 2
+    };
     private ResourceLocation selectedRecipeId;
     private double progress;
     private double clockSpeedPercent = 100.0;
@@ -72,6 +81,11 @@ public class RefineryBlockEntity extends BlockEntity implements ImplementedInven
         @Override
         protected boolean canExtract(FluidVariant variant) {
             return false;
+        }
+
+        @Override
+        protected boolean canInsert(FluidVariant variant) {
+            return isValidInputFluid(variant);
         }
 
         @Override
@@ -110,6 +124,40 @@ public class RefineryBlockEntity extends BlockEntity implements ImplementedInven
     @Override
     public NonNullList<ItemStack> getItems() {
         return items;
+    }
+
+    @Override
+    public boolean canPlaceItem(int slot, ItemStack stack) {
+        if (slot == INPUT_SLOT) {
+            return isValidInput(stack);
+        }
+        if (slot >= SHARD_SLOT_START && slot < SHARD_SLOT_START + SHARD_SLOT_COUNT) {
+            return isValidShard(stack);
+        }
+        return false;
+    }
+
+    @Override
+    public void setItem(int slot, ItemStack stack) {
+        if (!stack.isEmpty() && !canPlaceItem(slot, stack)) {
+            return;
+        }
+        ImplementedInventory.super.setItem(slot, stack);
+    }
+
+    @Override
+    public int[] getSlotsForFace(Direction side) {
+        return SIDED_SLOTS;
+    }
+
+    @Override
+    public boolean canPlaceItemThroughFace(int slot, ItemStack stack, Direction side) {
+        return canPlaceItem(slot, stack);
+    }
+
+    @Override
+    public boolean canTakeItemThroughFace(int slot, ItemStack stack, Direction side) {
+        return slot == OUTPUT_SLOT;
     }
 
     @Override
@@ -178,6 +226,22 @@ public class RefineryBlockEntity extends BlockEntity implements ImplementedInven
 
     public boolean isValidShard(ItemStack stack) {
         return !stack.isEmpty() && stack.is(Items.AMETHYST_SHARD);
+    }
+
+    public boolean isValidInputFluid(FluidVariant variant) {
+        if (variant == null || variant.isBlank()) {
+            return false;
+        }
+        Optional<RefineryRecipe> recipeOpt = getSelectedRecipe();
+        if (recipeOpt.isEmpty()) {
+            return false;
+        }
+        RefineryRecipe.FluidEntry fluidIn = recipeOpt.get().getFluidInputEntry(0);
+        if (fluidIn == null) {
+            return false;
+        }
+        Fluid expected = getFluid(fluidIn.fluidId());
+        return expected != null && variant.isOf(expected);
     }
 
     public int getShardCount() {

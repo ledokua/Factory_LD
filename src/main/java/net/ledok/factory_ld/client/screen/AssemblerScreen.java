@@ -87,6 +87,7 @@ public class AssemblerScreen extends AbstractContainerScreen<AssemblerScreenHand
     private int previewRecipeIndex = -2;
     private int hoveredRecipeIndex = -1;
     private final List<RecipeEntry> recipeEntries = new ArrayList<>();
+    private final List<HoverItem> hoverItems = new ArrayList<>();
     private int scrollOffset = 0;
     private final Set<String> collapsedCategories = new HashSet<>();
 
@@ -212,12 +213,14 @@ public class AssemblerScreen extends AbstractContainerScreen<AssemblerScreenHand
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float delta) {
+        hoverItems.clear();
         super.render(guiGraphics, mouseX, mouseY, delta);
         if (currentTab == Tab.PRODUCTION) {
             renderProductionInfo(guiGraphics);
         } else {
             renderSelectedRecipe(guiGraphics, mouseX, mouseY);
         }
+        renderHoverTooltips(guiGraphics, mouseX, mouseY);
     }
 
     private void renderSelectedRecipe(GuiGraphics guiGraphics, int mouseX, int mouseY) {
@@ -538,6 +541,22 @@ public class AssemblerScreen extends AbstractContainerScreen<AssemblerScreenHand
         guiGraphics.renderItem(stack, x, y);
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
         RenderSystem.disableBlend();
+        hoverItems.add(new HoverItem(x, y, stack.copy()));
+    }
+
+    private void renderHoverTooltips(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+        if (this.hoveredSlot != null && this.hoveredSlot.hasItem()) {
+            renderTooltip(guiGraphics, mouseX, mouseY);
+            return;
+        }
+        for (int i = hoverItems.size() - 1; i >= 0; i--) {
+            HoverItem item = hoverItems.get(i);
+            if (mouseX >= item.x && mouseX < item.x + 16 && mouseY >= item.y && mouseY < item.y + 16) {
+                guiGraphics.renderTooltip(font, item.stack, mouseX, mouseY);
+                return;
+            }
+        }
+        renderTooltip(guiGraphics, mouseX, mouseY);
     }
 
     @Override
@@ -1011,6 +1030,7 @@ public class AssemblerScreen extends AbstractContainerScreen<AssemblerScreenHand
             for (ItemStack costStack : costStacks) {
                 guiGraphics.renderItem(costStack, costX, y);
                 guiGraphics.renderItemDecorations(font, costStack, costX, y);
+                hoverItems.add(new HoverItem(costX, y, costStack.copy()));
                 costX += 18;
             }
         }
@@ -1292,5 +1312,8 @@ public class AssemblerScreen extends AbstractContainerScreen<AssemblerScreenHand
         ProductionStatus(String key) {
             this.key = key;
         }
+    }
+
+    private record HoverItem(int x, int y, ItemStack stack) {
     }
 }

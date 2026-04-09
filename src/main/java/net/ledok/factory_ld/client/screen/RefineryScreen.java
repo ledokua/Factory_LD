@@ -1198,6 +1198,7 @@ public class RefineryScreen extends AbstractContainerScreen<RefineryScreenHandle
             for (ItemStack costStack : costStacks) {
                 guiGraphics.renderItem(costStack, costX, y);
                 guiGraphics.renderItemDecorations(font, costStack, costX, y);
+                hoverTargets.add(HoverTarget.item(costX, y, 16, 16, costStack.copy()));
                 costX += 18;
             }
             for (MachineFluidView fluidInput : recipe.fluidInputs()) {
@@ -1484,7 +1485,7 @@ public class RefineryScreen extends AbstractContainerScreen<RefineryScreenHandle
     }
 
     private void renderHoverTooltips(GuiGraphics guiGraphics, int mouseX, int mouseY) {
-        if (this.hoveredSlot != null) {
+        if (this.hoveredSlot != null && this.hoveredSlot.hasItem()) {
             renderTooltip(guiGraphics, mouseX, mouseY);
             return;
         }

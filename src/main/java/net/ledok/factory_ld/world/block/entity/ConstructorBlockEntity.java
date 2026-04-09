@@ -34,10 +34,12 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.SingleRecipeInput;
+import net.minecraft.core.Direction;
+import net.minecraft.world.WorldlyContainer;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
-public class ConstructorBlockEntity extends BlockEntity implements ImplementedInventory, ExtendedScreenHandlerFactory<ConstructorScreenData> {
+public class ConstructorBlockEntity extends BlockEntity implements ImplementedInventory, WorldlyContainer, ExtendedScreenHandlerFactory<ConstructorScreenData> {
     public static final int INPUT_SLOT = 0;
     public static final int OUTPUT_SLOT = 1;
     public static final int SHARD_SLOT_START = 2;
@@ -50,6 +52,13 @@ public class ConstructorBlockEntity extends BlockEntity implements ImplementedIn
     private static final long FLUID_OUTPUT_CAPACITY = 0;
 
     private final NonNullList<ItemStack> items = NonNullList.withSize(SLOT_COUNT, ItemStack.EMPTY);
+    private static final int[] SIDED_SLOTS = new int[] {
+        INPUT_SLOT,
+        OUTPUT_SLOT,
+        SHARD_SLOT_START,
+        SHARD_SLOT_START + 1,
+        SHARD_SLOT_START + 2
+    };
     private ResourceLocation selectedRecipeId;
     private double progress;
     private double clockSpeedPercent = 100.0;
@@ -107,6 +116,40 @@ public class ConstructorBlockEntity extends BlockEntity implements ImplementedIn
     @Override
     public NonNullList<ItemStack> getItems() {
         return items;
+    }
+
+    @Override
+    public boolean canPlaceItem(int slot, ItemStack stack) {
+        if (slot == INPUT_SLOT) {
+            return isValidInput(stack);
+        }
+        if (slot >= SHARD_SLOT_START && slot < SHARD_SLOT_START + SHARD_SLOT_COUNT) {
+            return isValidShard(stack);
+        }
+        return false;
+    }
+
+    @Override
+    public void setItem(int slot, ItemStack stack) {
+        if (!stack.isEmpty() && !canPlaceItem(slot, stack)) {
+            return;
+        }
+        ImplementedInventory.super.setItem(slot, stack);
+    }
+
+    @Override
+    public int[] getSlotsForFace(Direction side) {
+        return SIDED_SLOTS;
+    }
+
+    @Override
+    public boolean canPlaceItemThroughFace(int slot, ItemStack stack, Direction side) {
+        return canPlaceItem(slot, stack);
+    }
+
+    @Override
+    public boolean canTakeItemThroughFace(int slot, ItemStack stack, Direction side) {
+        return slot == OUTPUT_SLOT;
     }
 
     @Override
