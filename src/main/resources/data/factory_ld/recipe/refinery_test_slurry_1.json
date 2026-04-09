@@ -1,0 +1,33 @@
+{
+  "type": "factory_ld:refinery",
+  "recipe_name": "Test Slurry 1",
+  "category": "Standart Parts",
+  "research_group": "base",
+  "item_inputs": [
+    {
+      "ingredient": {
+        "item": "minecraft:iron_ingot"
+      },
+      "count": 1
+    }
+  ],
+  "fluid_inputs": [
+    {
+      "id": "minecraft:water",
+      "amount_mb": 1000
+    }
+  ],
+  "item_outputs": [
+    {
+      "id": "minecraft:iron_nugget",
+      "count": 4
+    }
+  ],
+  "fluid_outputs": [
+    {
+      "id": "minecraft:lava",
+      "amount_mb": 250
+    }
+  ],
+  "craft_time": 160
+}

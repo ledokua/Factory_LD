@@ -1,0 +1,27 @@
+{
+  "type": "factory_ld:assembler",
+  "recipe_name": "Test Bolts 1",
+  "category": "Standart Parts",
+  "research_group": "base",
+  "item_inputs": [
+    {
+      "ingredient": {
+        "item": "minecraft:iron_ingot"
+      },
+      "count": 1
+    },
+    {
+      "ingredient": {
+        "item": "minecraft:gold_ingot"
+      },
+      "count": 1
+    }
+  ],
+  "item_outputs": [
+    {
+      "id": "minecraft:iron_nugget",
+      "count": 20
+    }
+  ],
+  "craft_time": 120
+}
