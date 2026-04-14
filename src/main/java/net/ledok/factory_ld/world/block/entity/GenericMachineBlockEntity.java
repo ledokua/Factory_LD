@@ -17,6 +17,7 @@ import net.ledok.factory_ld.world.recipe.MachineRecipe;
 import net.ledok.factory_ld.world.research.ResearchManager;
 import net.ledok.factory_ld.world.screen.GenericMachineScreenData;
 import net.ledok.factory_ld.world.screen.GenericMachineScreenHandler;
+import net.ledok.factory_ld.world.power.PowerUnits;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
@@ -41,6 +42,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluid;
 
 public class GenericMachineBlockEntity extends AbstractMachineBlockEntity implements WorldlyContainer, ExtendedScreenHandlerFactory<GenericMachineScreenData> {
+    private static final double STANDBY_POWER_MW = 0.1;
     private final String machineId;
     private final SingleVariantStorage<FluidVariant>[] inputTanks;
     private final SingleVariantStorage<FluidVariant>[] outputTanks;
@@ -136,6 +138,23 @@ public class GenericMachineBlockEntity extends AbstractMachineBlockEntity implem
             return Optional.of(recipe);
         }
         return Optional.empty();
+    }
+
+    public boolean hasSelectedRecipeForPowerGrid() {
+        return getSelectedRecipe().isPresent();
+    }
+
+    public boolean canProcessSelectedRecipeForPowerGrid() {
+        Optional<MachineRecipe> recipeOpt = getSelectedRecipe();
+        return recipeOpt.isPresent() && canProcessRecipe(recipeOpt.get());
+    }
+
+    public double activeDemandPerTickMj() {
+        return PowerUnits.mwToMjPerTick(getPowerUsageMw());
+    }
+
+    public double standbyDemandPerTickMj() {
+        return PowerUnits.mwToMjPerTick(STANDBY_POWER_MW);
     }
 
     @Override

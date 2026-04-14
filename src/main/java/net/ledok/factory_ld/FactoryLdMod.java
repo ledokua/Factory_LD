@@ -6,6 +6,7 @@ import net.ledok.factory_ld.registry.ModBlocks;
 import net.ledok.factory_ld.registry.ModCommands;
 import net.ledok.factory_ld.registry.ModCreativeTabs;
 import net.ledok.factory_ld.registry.ModFluidStorages;
+import net.ledok.factory_ld.registry.ModItems;
 import net.ledok.factory_ld.registry.ModNetworking;
 import net.ledok.factory_ld.registry.ModRecipes;
 import net.ledok.factory_ld.registry.ModScreenHandlers;
@@ -21,6 +22,7 @@ public class FactoryLdMod implements ModInitializer {
         ModScreenHandlers.register();
         ModRecipes.register();
         ModFluidStorages.register();
+        ModItems.register();
         ModCreativeTabs.register();
         ModCommands.register();
         ModNetworking.register();

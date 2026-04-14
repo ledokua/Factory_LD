@@ -16,14 +16,17 @@ import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
+import net.ledok.factory_ld.world.power.PowerConnectable;
+import net.ledok.factory_ld.world.power.PowerGridManager;
+import net.ledok.factory_ld.world.power.PowerUnits;
 
-public abstract class AbstractMachineBlockEntity extends BlockEntity implements ImplementedInventory, OverclockMachineEntity {
+public abstract class AbstractMachineBlockEntity extends BlockEntity implements ImplementedInventory, OverclockMachineEntity, PowerConnectable {
     protected final NonNullList<ItemStack> items;
     protected final MachineSpec machineSpec;
     protected ResourceLocation selectedRecipeId;
     protected double progress;
     protected double clockSpeedPercent = 100.0;
-    protected double energyStored;
+    protected boolean lastPowerAvailable = true;
 
     protected AbstractMachineBlockEntity(
         BlockEntityType<?> type,
@@ -35,7 +38,6 @@ public abstract class AbstractMachineBlockEntity extends BlockEntity implements 
         super(type, pos, state);
         this.machineSpec = machineSpec;
         this.items = NonNullList.withSize(slotCount, ItemStack.EMPTY);
-        this.energyStored = machineSpec.energyCapacityMj();
     }
 
     @Override
@@ -46,6 +48,22 @@ public abstract class AbstractMachineBlockEntity extends BlockEntity implements 
     @Override
     public boolean stillValid(Player player) {
         return Container.stillValidBlockEntity(this, player);
+    }
+
+    @Override
+    public void clearRemoved() {
+        super.clearRemoved();
+        if (level != null && !level.isClientSide) {
+            PowerGridManager.markDirty(level, worldPosition);
+        }
+    }
+
+    @Override
+    public void setRemoved() {
+        if (level != null && !level.isClientSide) {
+            PowerGridManager.markDirty(level, worldPosition);
+        }
+        super.setRemoved();
     }
 
     @Override
@@ -81,6 +99,11 @@ public abstract class AbstractMachineBlockEntity extends BlockEntity implements 
     protected abstract boolean isRecipeIdValid(ResourceLocation id);
 
     protected void onRecipeChanged() {
+    }
+
+    @Override
+    public int maxPowerConnections() {
+        return 1;
     }
 
     public int getShardCount() {
@@ -129,24 +152,15 @@ public abstract class AbstractMachineBlockEntity extends BlockEntity implements 
     }
 
     public double getEnergyStored() {
-        return energyStored;
+        return 0.0;
     }
 
     public double getEnergyCapacity() {
-        return machineSpec.energyCapacityMj();
+        return 0.0;
     }
 
     public double addEnergy(double amountMj) {
-        if (amountMj <= 0.0) {
-            return 0.0;
-        }
-        double accepted = Math.min(amountMj, machineSpec.energyCapacityMj() - energyStored);
-        if (accepted <= 0.0) {
-            return 0.0;
-        }
-        energyStored += accepted;
-        setChanged();
-        return accepted;
+        return 0.0;
     }
 
     public double getPowerUsageMw() {
@@ -163,12 +177,17 @@ public abstract class AbstractMachineBlockEntity extends BlockEntity implements 
     }
 
     protected boolean consumePowerForTick() {
-        double powerPerTick = getPowerUsageMw() / 20.0;
-        if (energyStored < powerPerTick) {
-            return false;
-        }
-        energyStored = Math.max(0.0, energyStored - powerPerTick);
-        return true;
+        double powerPerTick = PowerUnits.mwToMjPerTick(getPowerUsageMw());
+        return level != null && PowerGridManager.consume(level, worldPosition, powerPerTick);
+    }
+
+    public boolean hasSufficientPowerForTick() {
+        double powerPerTick = PowerUnits.mwToMjPerTick(getPowerUsageMw());
+        return level != null && PowerGridManager.canProvide(level, worldPosition, powerPerTick);
+    }
+
+    public boolean wasPoweredLastTick() {
+        return lastPowerAvailable;
     }
 
     protected void advanceProgressTick() {
@@ -185,14 +204,25 @@ public abstract class AbstractMachineBlockEntity extends BlockEntity implements 
 
     protected boolean processCraftingTick(int craftTimeTicks, boolean canProcess, Runnable onCraftCompleted) {
         if (!canProcess) {
+            boolean powerChanged = !lastPowerAvailable;
+            lastPowerAvailable = true;
             resetProgress();
+            if (powerChanged) {
+                setChanged();
+            }
             return false;
         }
         if (!consumePowerForTick()) {
+            boolean powerChanged = lastPowerAvailable;
+            lastPowerAvailable = false;
             resetProgress();
+            if (powerChanged) {
+                setChanged();
+            }
             return false;
         }
 
+        lastPowerAvailable = true;
         advanceProgressTick();
         if (isCraftComplete(craftTimeTicks)) {
             consumeCraftProgress(craftTimeTicks);
@@ -205,9 +235,6 @@ public abstract class AbstractMachineBlockEntity extends BlockEntity implements 
     protected void loadMachineData(CompoundTag nbt) {
         if (nbt.contains("SelectedRecipe")) {
             selectedRecipeId = ResourceLocation.tryParse(nbt.getString("SelectedRecipe"));
-            if (selectedRecipeId != null && !isRecipeIdValid(selectedRecipeId)) {
-                selectedRecipeId = null;
-            }
         } else {
             selectedRecipeId = null;
         }
@@ -217,10 +244,10 @@ public abstract class AbstractMachineBlockEntity extends BlockEntity implements 
         } else {
             clockSpeedPercent = 100.0;
         }
-        if (nbt.contains("EnergyStored")) {
-            energyStored = nbt.getDouble("EnergyStored");
+        if (nbt.contains("LastPowerAvailable")) {
+            lastPowerAvailable = nbt.getBoolean("LastPowerAvailable");
         } else {
-            energyStored = machineSpec.energyCapacityMj();
+            lastPowerAvailable = true;
         }
         clampClockSpeed();
     }
@@ -231,7 +258,7 @@ public abstract class AbstractMachineBlockEntity extends BlockEntity implements 
         }
         nbt.putDouble("Progress", progress);
         nbt.putDouble("ClockSpeed", clockSpeedPercent);
-        nbt.putDouble("EnergyStored", energyStored);
+        nbt.putBoolean("LastPowerAvailable", lastPowerAvailable);
     }
 
     protected void setProgress(double value) {

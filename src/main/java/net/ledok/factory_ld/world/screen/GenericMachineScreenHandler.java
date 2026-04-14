@@ -270,8 +270,9 @@ public class GenericMachineScreenHandler extends AbstractMachineScreenHandler<Ge
             }
         }
 
-        double powerPerTick = blockEntity.getPowerUsageMw() / 20.0;
-        if (blockEntity.getEnergyStored() < powerPerTick) {
+        boolean isClient = blockEntity.getLevel() != null && blockEntity.getLevel().isClientSide;
+        boolean hasPower = isClient ? blockEntity.wasPoweredLastTick() : blockEntity.hasSufficientPowerForTick();
+        if (!hasPower) {
             return UiProductionStatus.NO_POWER;
         }
         return UiProductionStatus.WORKING;

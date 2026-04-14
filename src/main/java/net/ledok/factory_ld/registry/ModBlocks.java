@@ -2,6 +2,7 @@ package net.ledok.factory_ld.registry;
 
 import net.ledok.factory_ld.FactoryLdMod;
 import net.ledok.factory_ld.world.block.PowerEmitterBlock;
+import net.ledok.factory_ld.world.block.PowerPoleBlock;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -20,6 +21,8 @@ public final class ModBlocks {
     public static Block MANUFACTURER;
     public static Block SMELTER;
     public static Block POWER_EMITTER;
+    public static Block POWER_POLE;
+    public static Block POWER_STORAGE;
 
     private ModBlocks() {
     }
@@ -42,6 +45,13 @@ public final class ModBlocks {
             "power_emitter",
             new PowerEmitterBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.IRON_BLOCK))
         );
+        POWER_POLE = register(
+            "power_pole",
+            new PowerPoleBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.IRON_BLOCK))
+        );
+        for (PowerStorageDescriptors.Descriptor descriptor : PowerStorageDescriptors.ALL) {
+            register(descriptor.id(), descriptor.createBlock());
+        }
         CONSTRUCTOR = requireMachineBlock("constructor");
         ASSEMBLER = requireMachineBlock("assembler");
         REFINERY = requireMachineBlock("refinery");
@@ -49,10 +59,16 @@ public final class ModBlocks {
         FOUNDRY = requireMachineBlock("foundry");
         MANUFACTURER = requireMachineBlock("manufacturer");
         SMELTER = requireMachineBlock("smelter");
+        POWER_STORAGE = requirePowerStorageBlock("power_storage");
     }
 
     public static Block requireMachineBlock(String id) {
         return BuiltInRegistries.BLOCK.getOptional(FactoryLdMod.id(id))
             .orElseThrow(() -> new IllegalStateException("Machine block not registered: " + id));
+    }
+
+    public static Block requirePowerStorageBlock(String id) {
+        return BuiltInRegistries.BLOCK.getOptional(FactoryLdMod.id(id))
+            .orElseThrow(() -> new IllegalStateException("Power storage block not registered: " + id));
     }
 }

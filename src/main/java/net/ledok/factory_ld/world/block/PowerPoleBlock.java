@@ -1,14 +1,12 @@
 package net.ledok.factory_ld.world.block;
 
-import net.ledok.factory_ld.registry.ModBlockEntities;
-import net.ledok.factory_ld.world.block.entity.PowerEmitterBlockEntity;
-import net.ledok.factory_ld.world.power.PowerLinkInteraction;
+import net.ledok.factory_ld.world.block.entity.PowerPoleBlockEntity;
 import net.ledok.factory_ld.world.power.PowerGridManager;
+import net.ledok.factory_ld.world.power.PowerLinkInteraction;
 import net.ledok.factory_ld.world.power.PowerNetworkManager;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.InteractionResult;
-import net.minecraft.world.MenuProvider;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -19,24 +17,19 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 
-public class PowerEmitterBlock extends Block implements EntityBlock {
-    public PowerEmitterBlock(Properties properties) {
+public class PowerPoleBlock extends Block implements EntityBlock {
+    public PowerPoleBlock(Properties properties) {
         super(properties);
     }
 
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
-        return new PowerEmitterBlockEntity(pos, state);
+        return new PowerPoleBlockEntity(pos, state);
     }
 
     @Override
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        if (level.isClientSide) {
-            return null;
-        }
-        return type == ModBlockEntities.POWER_EMITTER
-            ? (lvl, pos, blockState, blockEntity) -> PowerEmitterBlockEntity.serverTick(lvl, pos, blockState, (PowerEmitterBlockEntity) blockEntity)
-            : null;
+        return null;
     }
 
     @Override
@@ -44,13 +37,8 @@ public class PowerEmitterBlock extends Block implements EntityBlock {
         if (level.isClientSide) {
             return InteractionResult.SUCCESS;
         }
-        if (player.isShiftKeyDown() && player instanceof ServerPlayer serverPlayer) {
+        if (player instanceof ServerPlayer serverPlayer) {
             PowerLinkInteraction.handle(serverPlayer, pos);
-            return InteractionResult.CONSUME;
-        }
-        BlockEntity blockEntity = level.getBlockEntity(pos);
-        if (blockEntity instanceof MenuProvider provider) {
-            player.openMenu(provider);
         }
         return InteractionResult.CONSUME;
     }

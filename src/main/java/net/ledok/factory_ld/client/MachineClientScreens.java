@@ -3,6 +3,7 @@ package net.ledok.factory_ld.client;
 import java.util.List;
 
 import net.ledok.factory_ld.client.screen.GenericMachineScreen;
+import net.ledok.factory_ld.client.screen.PowerEmitterScreen;
 import net.ledok.factory_ld.registry.MachineDescriptors;
 import net.ledok.factory_ld.registry.ModScreenHandlers;
 import net.minecraft.client.gui.screens.MenuScreens;
@@ -18,5 +19,6 @@ public final class MachineClientScreens {
         for (Runnable registration : registrations) {
             registration.run();
         }
+        MenuScreens.register(ModScreenHandlers.POWER_EMITTER, PowerEmitterScreen::new);
     }
 }

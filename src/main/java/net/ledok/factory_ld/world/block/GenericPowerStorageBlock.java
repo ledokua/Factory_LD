@@ -1,14 +1,12 @@
 package net.ledok.factory_ld.world.block;
 
-import java.util.function.Supplier;
-
-import net.ledok.factory_ld.world.block.entity.AbstractMachineBlockEntity;
+import net.ledok.factory_ld.registry.ModBlockEntities;
+import net.ledok.factory_ld.world.block.entity.GenericPowerStorageBlockEntity;
 import net.ledok.factory_ld.world.power.PowerLinkInteraction;
-import net.ledok.factory_ld.world.power.PowerNetworkManager;
 import net.ledok.factory_ld.world.power.PowerGridManager;
+import net.ledok.factory_ld.world.power.PowerNetworkManager;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.MenuProvider;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
@@ -20,42 +18,32 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 
-public abstract class AbstractMachineBlock<T extends AbstractMachineBlockEntity> extends Block implements EntityBlock {
-    private final Supplier<BlockEntityType<T>> blockEntityTypeSupplier;
-    private final BlockEntityType.BlockEntitySupplier<T> blockEntityFactory;
-    private final ServerTicker<T> serverTicker;
+public class GenericPowerStorageBlock extends Block implements EntityBlock {
+    private final String storageId;
 
-    protected AbstractMachineBlock(
-        Properties properties,
-        Supplier<BlockEntityType<T>> blockEntityTypeSupplier,
-        BlockEntityType.BlockEntitySupplier<T> blockEntityFactory,
-        ServerTicker<T> serverTicker
-    ) {
+    public GenericPowerStorageBlock(Properties properties, String storageId) {
         super(properties);
-        this.blockEntityTypeSupplier = blockEntityTypeSupplier;
-        this.blockEntityFactory = blockEntityFactory;
-        this.serverTicker = serverTicker;
+        this.storageId = storageId;
     }
 
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
-        return blockEntityFactory.create(pos, state);
+        return new GenericPowerStorageBlockEntity(pos, state, storageId);
     }
 
     @Override
-    public <E extends BlockEntity> BlockEntityTicker<E> getTicker(Level level, BlockState state, BlockEntityType<E> type) {
+    public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
         if (level.isClientSide) {
             return null;
         }
-        if (type != blockEntityTypeSupplier.get()) {
-            return null;
-        }
-        return (lvl, pos, blockState, blockEntity) -> serverTicker.tick(lvl, pos, blockState, castBlockEntity(blockEntity));
-    }
-
-    @SuppressWarnings("unchecked")
-    private T castBlockEntity(BlockEntity blockEntity) {
-        return (T) blockEntity;
+        return type == ModBlockEntities.requirePowerStorageBlockEntityType(storageId)
+            ? (lvl, pos, blockState, blockEntity) -> GenericPowerStorageBlockEntity.serverTick(
+                lvl,
+                pos,
+                blockState,
+                (GenericPowerStorageBlockEntity) blockEntity
+            )
+            : null;
     }
 
     @Override
@@ -63,13 +51,8 @@ public abstract class AbstractMachineBlock<T extends AbstractMachineBlockEntity>
         if (level.isClientSide) {
             return InteractionResult.SUCCESS;
         }
-        if (player.isShiftKeyDown() && player instanceof ServerPlayer serverPlayer) {
+        if (player instanceof ServerPlayer serverPlayer) {
             PowerLinkInteraction.handle(serverPlayer, pos);
-            return InteractionResult.CONSUME;
-        }
-        BlockEntity blockEntity = level.getBlockEntity(pos);
-        if (blockEntity instanceof MenuProvider provider) {
-            player.openMenu(provider);
         }
         return InteractionResult.CONSUME;
     }
@@ -88,10 +71,5 @@ public abstract class AbstractMachineBlock<T extends AbstractMachineBlockEntity>
             PowerNetworkManager.removeNode(level, pos);
         }
         super.onRemove(state, level, pos, newState, movedByPiston);
-    }
-
-    @FunctionalInterface
-    protected interface ServerTicker<T extends BlockEntity> {
-        void tick(Level level, BlockPos pos, BlockState state, T blockEntity);
     }
 }
