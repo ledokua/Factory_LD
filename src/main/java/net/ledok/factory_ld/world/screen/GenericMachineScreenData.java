@@ -8,11 +8,11 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.resources.ResourceLocation;
 
-public record AssemblerScreenData(BlockPos pos, List<ResourceLocation> unlockedRecipes, boolean overclockUnlocked) {
-    public static final StreamCodec<RegistryFriendlyByteBuf, AssemblerScreenData> STREAM_CODEC =
-        StreamCodec.of(AssemblerScreenData::encode, AssemblerScreenData::decode);
+public record GenericMachineScreenData(BlockPos pos, List<ResourceLocation> unlockedRecipes, boolean overclockUnlocked) {
+    public static final StreamCodec<RegistryFriendlyByteBuf, GenericMachineScreenData> STREAM_CODEC =
+        StreamCodec.of(GenericMachineScreenData::encode, GenericMachineScreenData::decode);
 
-    private static AssemblerScreenData decode(RegistryFriendlyByteBuf buf) {
+    private static GenericMachineScreenData decode(RegistryFriendlyByteBuf buf) {
         BlockPos pos = BlockPos.STREAM_CODEC.decode(buf);
         int size = buf.readVarInt();
         List<ResourceLocation> unlocked = new ArrayList<>(size);
@@ -20,10 +20,10 @@ public record AssemblerScreenData(BlockPos pos, List<ResourceLocation> unlockedR
             unlocked.add(ResourceLocation.STREAM_CODEC.decode(buf));
         }
         boolean overclockUnlocked = buf.readBoolean();
-        return new AssemblerScreenData(pos, unlocked, overclockUnlocked);
+        return new GenericMachineScreenData(pos, unlocked, overclockUnlocked);
     }
 
-    private static void encode(RegistryFriendlyByteBuf buf, AssemblerScreenData data) {
+    private static void encode(RegistryFriendlyByteBuf buf, GenericMachineScreenData data) {
         BlockPos.STREAM_CODEC.encode(buf, data.pos);
         buf.writeVarInt(data.unlockedRecipes.size());
         for (ResourceLocation id : data.unlockedRecipes) {

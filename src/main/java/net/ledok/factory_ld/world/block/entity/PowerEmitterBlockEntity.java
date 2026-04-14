@@ -24,14 +24,8 @@ public class PowerEmitterBlockEntity extends BlockEntity {
         }
         for (Direction direction : Direction.values()) {
             BlockEntity target = level.getBlockEntity(worldPosition.relative(direction));
-            if (target instanceof ConstructorBlockEntity constructor) {
-                constructor.addEnergy(OUTPUT_PER_TICK_MJ);
-            }
-            if (target instanceof AssemblerBlockEntity assembler) {
-                assembler.addEnergy(OUTPUT_PER_TICK_MJ);
-            }
-            if (target instanceof RefineryBlockEntity refinery) {
-                refinery.addEnergy(OUTPUT_PER_TICK_MJ);
+            if (target instanceof AbstractMachineBlockEntity machine) {
+                machine.addEnergy(OUTPUT_PER_TICK_MJ);
             }
         }
     }

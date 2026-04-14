@@ -10,10 +10,11 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import net.ledok.factory_ld.world.recipe.ConstructorRecipe;
-import net.ledok.factory_ld.world.block.entity.ConstructorBlockEntity;
-import net.ledok.factory_ld.world.screen.ConstructorScreenHandler;
+import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
+import net.ledok.factory_ld.world.screen.AbstractMachineScreenHandler;
+import net.ledok.factory_ld.world.screen.FluidMachineMenuContext;
 import net.ledok.factory_ld.world.recipe.view.MachineItemStackView;
+import net.ledok.factory_ld.world.recipe.view.MachineFluidView;
 import net.ledok.factory_ld.world.recipe.view.MachineRecipeView;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.ledok.factory_ld.registry.ModNetworking;
@@ -24,14 +25,19 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.resources.language.I18n;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.ChatFormatting;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.level.material.Fluids;
+import net.minecraft.world.level.material.Fluid;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import com.mojang.blaze3d.systems.RenderSystem;
 
-public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreenHandler> {
+public abstract class AbstractFluidMachineScreen<H extends AbstractMachineScreenHandler<?, ?>>
+    extends AbstractContainerScreen<H> {
     private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath("factory_ld", "textures/gui/constructor.png");
     private static final ResourceLocation OVERCLOCK_LOCKED_TEXTURE = ResourceLocation.fromNamespaceAndPath("factory_ld", "textures/gui/constructor_overclock_locked.png");
     private static final ResourceLocation PROGRESS_BG_TEXTURE = ResourceLocation.fromNamespaceAndPath("factory_ld", "textures/gui/constructor_progress_bg.png");
@@ -56,7 +62,6 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
     private static final int PROD_HEADER_Y = 26;
     private static final int PROD_HEADER_H = 18;
     private static final int PROD_SECTION_TOP = 48;
-    private static final int PROD_SECTION_H = ConstructorScreenHandler.PLAYER_INV_Y - PROD_SECTION_TOP - 7;
     private static final int PROD_PANEL_W = 76;
     private static final int PROD_PANEL_GAP = 6;
     private static final int PROD_LEFT_PANEL_X = 8;
@@ -64,15 +69,16 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
     private static final int PROD_RIGHT_PANEL_X = PROD_CENTER_PANEL_X + PROD_PANEL_W + PROD_PANEL_GAP;
     private static final int PROD_OVERCLOCK_Y = 194;
     private static final int PROD_OVERCLOCK_H = 25;
-    private static final int PROD_OVERCLOCK_LOCKED_Y = ConstructorScreenHandler.SHARD_SLOT_Y;
     private static final int PROD_OVERCLOCK_LOCKED_W = PROD_PANEL_W;
     private static final int PROD_OVERCLOCK_LOCKED_H = 60;
     private static final int PROD_PROGRESS_W = 56;
     private static final int PROD_PROGRESS_H = 6;
     private static final int OVERCLOCK_LINE_HEIGHT = 9;
     private static final float PROD_FLOW_NAME_SCALE = 0.5F;
+    private static final int FLUID_SLOT_RADIUS = 9;
+    private static final int FLUID_SLOT_BG = 0xFF3A3A3A;
+    private static final int FLUID_SLOT_INNER = 0xFF151515;
     private static final String PRIMARY_CATEGORY = "Standart Parts";
-    private static final String MACHINE_TYPE_KEY = "constructor";
     private static final Map<String, CopiedSettings> COPIED_SETTINGS = new HashMap<>();
     private Button closeButton;
     private EditBox searchBox;
@@ -86,14 +92,119 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
     private int previewRecipeIndex = -2;
     private int hoveredRecipeIndex = -1;
     private final List<RecipeEntry> recipeEntries = new ArrayList<>();
-    private final List<HoverItem> hoverItems = new ArrayList<>();
+    private final List<HoverTarget> hoverTargets = new ArrayList<>();
     private int scrollOffset = 0;
     private final Set<String> collapsedCategories = new HashSet<>();
 
-    public ConstructorScreen(ConstructorScreenHandler handler, Inventory inventory, Component title) {
+    protected AbstractFluidMachineScreen(H handler, Inventory inventory, Component title) {
         super(handler, inventory, title);
         this.imageWidth = 256;
         this.imageHeight = 256;
+    }
+
+    protected abstract int playerInventoryY();
+
+    protected abstract int shardSlotY();
+
+    protected int fluidInputSlotX() {
+        return 0;
+    }
+
+    protected int fluidInputSlotY() {
+        return 0;
+    }
+
+    protected int fluidOutputSlotX() {
+        return 0;
+    }
+
+    protected int fluidOutputSlotY() {
+        return 0;
+    }
+
+    protected int fluidInputSlotCount() {
+        return supportsFluidSlots() ? 1 : 0;
+    }
+
+    protected int fluidOutputSlotCount() {
+        return supportsFluidSlots() ? 1 : 0;
+    }
+
+    protected int fluidInputSlotX(int index) {
+        return fluidInputSlotX();
+    }
+
+    protected int fluidInputSlotY(int index) {
+        return fluidInputSlotY();
+    }
+
+    protected int fluidOutputSlotX(int index) {
+        return fluidOutputSlotX();
+    }
+
+    protected int fluidOutputSlotY(int index) {
+        return fluidOutputSlotY();
+    }
+
+    protected boolean supportsFluidSlots() {
+        return false;
+    }
+
+    protected abstract int[] inputGhostSlotIndices();
+
+    protected abstract int outputGhostSlotIndex();
+
+    protected abstract String machineTypeKey();
+
+    protected abstract ProductionStatus getProductionStatus();
+
+    private boolean isFluidPrimary(ResourceLocation recipeId) {
+        if (menu instanceof FluidMachineMenuContext fluidMenu) {
+            return fluidMenu.isFluidPrimary(recipeId);
+        }
+        return false;
+    }
+
+    private int inputFluidTankCount() {
+        if (menu instanceof FluidMachineMenuContext fluidMenu) {
+            return fluidMenu.getInputFluidTankCount();
+        }
+        return 0;
+    }
+
+    private int outputFluidTankCount() {
+        if (menu instanceof FluidMachineMenuContext fluidMenu) {
+            return fluidMenu.getOutputFluidTankCount();
+        }
+        return 0;
+    }
+
+    private FluidVariant inputFluidVariant(int index) {
+        if (menu instanceof FluidMachineMenuContext fluidMenu) {
+            return fluidMenu.getInputFluidVariant(index);
+        }
+        return FluidVariant.blank();
+    }
+
+    private FluidVariant outputFluidVariant(int index) {
+        if (menu instanceof FluidMachineMenuContext fluidMenu) {
+            return fluidMenu.getOutputFluidVariant(index);
+        }
+        return FluidVariant.blank();
+    }
+
+    private long inputFluidMb(int index) {
+        if (menu instanceof FluidMachineMenuContext fluidMenu) {
+            return fluidMenu.getInputFluidMb(index);
+        }
+        return 0L;
+    }
+
+    private long outputFluidMb(int index) {
+        if (menu instanceof FluidMachineMenuContext fluidMenu) {
+            return fluidMenu.getOutputFluidMb(index);
+        }
+        return 0L;
     }
 
     @Override
@@ -101,7 +212,7 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
         super.init();
         this.titleLabelX = HEADER_X;
         this.titleLabelY = HEADER_Y;
-        this.inventoryLabelY = ConstructorScreenHandler.PLAYER_INV_Y - 11;
+        this.inventoryLabelY = playerInventoryY() - 11;
         clearWidgets();
         previewRecipeIndex = -2;
         recipeEntries.clear();
@@ -212,7 +323,7 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float delta) {
-        hoverItems.clear();
+        hoverTargets.clear();
         super.render(guiGraphics, mouseX, mouseY, delta);
         if (currentTab == Tab.PRODUCTION) {
             renderProductionInfo(guiGraphics);
@@ -246,26 +357,39 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
         if (recipe == null) {
             guiGraphics.drawCenteredString(font, Component.translatable("screen.factory_ld.constructor.no_recipe"), leftPos + imageWidth / 2, headerY + 5, 0xD8D8D8);
         } else {
+            boolean fluidPrimary = isFluidPrimary(recipe.id());
+            String amount = fluidPrimary && !recipe.fluidOutputs().isEmpty()
+                ? formatFluidAmountHuman(recipe.fluidOutputs().get(0).amountMb())
+                : Integer.toString(recipe.itemOutputs().isEmpty() ? 1 : recipe.itemOutputs().get(0).amountPerCraft());
             Component title = Component.translatable(
                 "screen.factory_ld.constructor.select.preview.title",
-                recipe.itemOutputs().isEmpty() ? 1 : recipe.itemOutputs().get(0).amountPerCraft(),
+                amount,
                 recipeNameComponent(recipe)
             );
             guiGraphics.drawCenteredString(font, title, leftPos + imageWidth / 2, headerY + 5, 0xF0F0F0);
         }
 
         int sectionY = topPos + PROD_SECTION_TOP;
-        guiGraphics.fill(leftPos + PROD_LEFT_PANEL_X, sectionY, leftPos + PROD_LEFT_PANEL_X + PROD_PANEL_W, sectionY + PROD_SECTION_H, 0xCCEEEEEE);
-        guiGraphics.fill(leftPos + PROD_CENTER_PANEL_X, sectionY, leftPos + PROD_CENTER_PANEL_X + PROD_PANEL_W, sectionY + PROD_SECTION_H, 0xCC191919);
-        guiGraphics.fill(leftPos + PROD_RIGHT_PANEL_X, sectionY, leftPos + PROD_RIGHT_PANEL_X + PROD_PANEL_W, sectionY + PROD_SECTION_H, 0xCCEEEEEE);
-        int leftFlowY = topPos + menu.slots.get(0).y;
-        int rightFlowY = topPos + menu.slots.get(1).y;
+        int prodSectionHeight = playerInventoryY() - PROD_SECTION_TOP - 7;
+        guiGraphics.fill(leftPos + PROD_LEFT_PANEL_X, sectionY, leftPos + PROD_LEFT_PANEL_X + PROD_PANEL_W, sectionY + prodSectionHeight, 0xCCEEEEEE);
+        guiGraphics.fill(leftPos + PROD_CENTER_PANEL_X, sectionY, leftPos + PROD_CENTER_PANEL_X + PROD_PANEL_W, sectionY + prodSectionHeight, 0xCC191919);
+        guiGraphics.fill(leftPos + PROD_RIGHT_PANEL_X, sectionY, leftPos + PROD_RIGHT_PANEL_X + PROD_PANEL_W, sectionY + prodSectionHeight, 0xCCEEEEEE);
+        int leftAnchor = inputGhostSlotIndices().length > 0 ? inputGhostSlotIndices()[0] : 0;
+        int rightAnchor = outputGhostSlotIndex();
+        if (leftAnchor < 0 || leftAnchor >= menu.slots.size()) {
+            leftAnchor = 0;
+        }
+        if (rightAnchor < 0 || rightAnchor >= menu.slots.size()) {
+            rightAnchor = Math.min(1, menu.slots.size() - 1);
+        }
+        int leftFlowY = topPos + menu.slots.get(leftAnchor).y;
+        int rightFlowY = topPos + menu.slots.get(rightAnchor).y;
         if (recipe == null) {
             renderFlowColumn(guiGraphics, leftPos + PROD_LEFT_PANEL_X + 4, leftFlowY, PROD_PANEL_W - 8, List.of(), List.of(), 0.0);
             renderCenterProductionPanelEmpty(guiGraphics, sectionY + 6);
             renderFlowColumn(guiGraphics, leftPos + PROD_RIGHT_PANEL_X + 4, rightFlowY, PROD_PANEL_W - 8, List.of(), List.of(), 0.0);
         } else {
-            double clockPercent = menu.getBlockEntity().getClockSpeedPercent();
+            double clockPercent = menu.getMachineBlockEntity().getClockSpeedPercent();
             double craftsPerMinute = 1200.0 / Math.max(1, recipe.craftTimeTicks()) * (clockPercent / 100.0);
             renderFlowColumn(guiGraphics, leftPos + PROD_LEFT_PANEL_X + 4, leftFlowY, PROD_PANEL_W - 8, recipe.itemInputs(), recipe.fluidInputs(), craftsPerMinute);
             renderCenterProductionPanel(guiGraphics, recipe, sectionY + 6);
@@ -284,7 +408,7 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
         int y,
         int width,
         List<MachineItemStackView> items,
-        List<?> fluids,
+        List<MachineFluidView> fluids,
         double craftsPerMinute
     ) {
         int rowY = y;
@@ -298,16 +422,26 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
             float perMinute = (float)(item.amountPerCraft() * craftsPerMinute);
             guiGraphics.drawString(font, Component.literal(formatPerMinute(perMinute) + "/m"), x + 18, rowY + 10, 0xCF8A34, false);
             rowY += 20;
-            if (rowY > y + PROD_SECTION_H - 18) {
+            if (rowY > y + (playerInventoryY() - PROD_SECTION_TOP - 7) - 18) {
                 return;
             }
         }
-        for (Object ignored : fluids) {
-            guiGraphics.fill(x + 2, rowY + 2, x + 14, rowY + 14, 0xFF2B7CC9);
-            drawEllipsizedScaled(guiGraphics, Component.literal("Fluid"), x + 18, rowY + 2, width - 20, 0x2B2B2B, PROD_FLOW_NAME_SCALE);
-            guiGraphics.drawString(font, Component.literal("-"), x + 18, rowY + 10, 0xCF8A34, false);
+        for (MachineFluidView fluid : fluids) {
+            drawFluidCircleSlot(guiGraphics, x + 8, rowY + 8);
+            drawFluidGlyph(guiGraphics, fluid.fluidId(), x + 8, rowY + 8, 7);
+            drawEllipsizedScaled(
+                guiGraphics,
+                Component.literal(formatFluidAmountHuman(fluid.amountMb()) + " " + formatFluidName(fluid.fluidId())),
+                x + 18,
+                rowY + 2,
+                width - 20,
+                0x2B2B2B,
+                PROD_FLOW_NAME_SCALE
+            );
+            float perMinuteMb = (float)(fluid.amountMb() * craftsPerMinute);
+            guiGraphics.drawString(font, Component.literal(formatFluidAmountHuman(Math.round(perMinuteMb)) + "/m"), x + 18, rowY + 10, 0xCF8A34, false);
             rowY += 20;
-            if (rowY > y + PROD_SECTION_H - 18) {
+            if (rowY > y + (playerInventoryY() - PROD_SECTION_TOP - 7) - 18) {
                 return;
             }
         }
@@ -325,16 +459,11 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
 
     private void renderCenterProductionPanel(GuiGraphics guiGraphics, MachineRecipeView recipe, int y) {
         int centerX = leftPos + PROD_CENTER_PANEL_X + PROD_PANEL_W / 2;
-        if (!recipe.itemOutputs().isEmpty()) {
-            ItemStack main = recipe.itemOutputs().get(0).stack().copy();
-            main.setCount(1);
-            guiGraphics.pose().pushPose();
-            guiGraphics.pose().translate(centerX - 16, y + 4, 0);
-            guiGraphics.pose().scale(2.0F, 2.0F, 1.0F);
-            guiGraphics.renderItem(main, 0, 0);
-            guiGraphics.pose().popPose();
-            if (recipe.itemOutputs().size() > 1) {
-                ItemStack by = recipe.itemOutputs().get(1).stack().copy();
+        boolean fluidPrimary = isFluidPrimary(recipe.id());
+        if (fluidPrimary && !recipe.fluidOutputs().isEmpty()) {
+            drawFluidGlyph(guiGraphics, recipe.fluidOutputs().get(0).fluidId(), centerX, y + 20, 14);
+            if (!recipe.itemOutputs().isEmpty()) {
+                ItemStack by = recipe.itemOutputs().get(0).stack().copy();
                 by.setCount(1);
                 drawCircle(guiGraphics, centerX + 20, y + 32, 10, BYPRODUCT_ACCENT_COLOR);
                 guiGraphics.pose().pushPose();
@@ -342,6 +471,29 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
                 guiGraphics.pose().scale(0.75F, 0.75F, 1.0F);
                 guiGraphics.renderItem(by, 0, 0);
                 guiGraphics.pose().popPose();
+            }
+        } else if (!recipe.itemOutputs().isEmpty()) {
+            ItemStack main = recipe.itemOutputs().get(0).stack().copy();
+            main.setCount(1);
+            guiGraphics.pose().pushPose();
+            guiGraphics.pose().translate(centerX - 16, y + 4, 0);
+            guiGraphics.pose().scale(2.0F, 2.0F, 1.0F);
+            guiGraphics.renderItem(main, 0, 0);
+            guiGraphics.pose().popPose();
+            if (recipe.itemOutputs().size() > 1 || !recipe.fluidOutputs().isEmpty()) {
+                boolean fluidByproduct = recipe.itemOutputs().size() <= 1;
+                drawCircle(guiGraphics, centerX + 20, y + 32, 10, BYPRODUCT_ACCENT_COLOR);
+                if (fluidByproduct) {
+                    drawFluidGlyph(guiGraphics, recipe.fluidOutputs().get(0).fluidId(), centerX + 20, y + 32, 7);
+                } else {
+                    ItemStack by = recipe.itemOutputs().get(1).stack().copy();
+                    by.setCount(1);
+                    guiGraphics.pose().pushPose();
+                    guiGraphics.pose().translate(centerX + 14, y + 26, 0);
+                    guiGraphics.pose().scale(0.75F, 0.75F, 1.0F);
+                    guiGraphics.renderItem(by, 0, 0);
+                    guiGraphics.pose().popPose();
+                }
             }
         }
         renderCenterProductionDetails(guiGraphics, centerX, y, Math.max(1, recipe.craftTimeTicks()));
@@ -369,11 +521,11 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
 
         float progress = 0.0F;
         if (craftTimeTicks > 0) {
-            progress = (float)Math.max(0.0, Math.min(1.0, menu.getBlockEntity().getProgress() / craftTimeTicks));
+            progress = (float)Math.max(0.0, Math.min(1.0, menu.getMachineBlockEntity().getProgress() / craftTimeTicks));
         }
         renderProgressBar(guiGraphics, centerX - PROD_PROGRESS_W / 2, y + 53, progress);
 
-        guiGraphics.drawCenteredString(font, Component.literal(formatPower(menu.getBlockEntity().getPowerUsageMw())), centerX, y + 62, 0xCF8A34);
+        guiGraphics.drawCenteredString(font, Component.literal(formatPower(menu.getMachineBlockEntity().getPowerUsageMw())), centerX, y + 62, 0xCF8A34);
         if (craftTimeTicks > 0) {
             guiGraphics.drawCenteredString(font, Component.literal(String.format(Locale.ROOT, "%.2fs", craftTimeTicks / 20.0f)), centerX, y + 71, 0xCF8A34);
         } else {
@@ -409,37 +561,6 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
         }
     }
 
-    private ProductionStatus getProductionStatus() {
-        var selectedRecipe = menu.getBlockEntity().getSelectedRecipe();
-        if (selectedRecipe.isEmpty()) {
-            return ProductionStatus.IDLE;
-        }
-        ConstructorRecipe recipe = selectedRecipe.get();
-        ItemStack input = menu.getBlockEntity().getItems().get(ConstructorBlockEntity.INPUT_SLOT);
-        ItemStack output = menu.getBlockEntity().getItems().get(ConstructorBlockEntity.OUTPUT_SLOT);
-        int inputCount = Math.max(1, recipe.getInputCount());
-        if (input.isEmpty() || input.getCount() < inputCount || !recipe.getInput().test(input)) {
-            return ProductionStatus.IDLE;
-        }
-        ItemStack result = recipe.getOutput();
-        if (result.isEmpty()) {
-            return ProductionStatus.IDLE;
-        }
-        if (!output.isEmpty()) {
-            if (!ItemStack.isSameItemSameComponents(output, result)) {
-                return ProductionStatus.IDLE;
-            }
-            if (output.getCount() + result.getCount() > output.getMaxStackSize()) {
-                return ProductionStatus.IDLE;
-            }
-        }
-        double powerPerTick = menu.getBlockEntity().getPowerUsageMw() / 20.0;
-        if (menu.getBlockEntity().getEnergyStored() < powerPerTick) {
-            return ProductionStatus.NO_POWER;
-        }
-        return ProductionStatus.WORKING;
-    }
-
     @Override
     protected void renderBg(GuiGraphics guiGraphics, float delta, int mouseX, int mouseY) {
         guiGraphics.blit(TEXTURE, leftPos, topPos, 0, 0, imageWidth, imageHeight);
@@ -454,6 +575,9 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
                 }
                 guiGraphics.blitSprite(SLOT_SPRITE, leftPos + slot.x - 1, topPos + slot.y - 1, 18, 18);
             }
+            if (supportsFluidSlots()) {
+                renderFluidSlots(guiGraphics);
+            }
         }
         renderGhostItems(guiGraphics);
     }
@@ -467,40 +591,124 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
         if (currentTab != Tab.PRODUCTION) {
             return;
         }
-        RecipeHolder<ConstructorRecipe> displayed = getDisplayedRecipeHolder();
-        if (displayed == null) {
+        MachineRecipeView recipe = menu.getSelectedRecipeView().orElse(null);
+        if (recipe == null) {
             return;
         }
-        ConstructorRecipe recipe = displayed.value();
-        Slot inputSlot = menu.slots.get(0);
-        Slot outputSlot = menu.slots.get(1);
-
-        if (!inputSlot.hasItem()) {
-            ItemStack[] matching = recipe.getInput().getItems();
-            if (matching.length > 0) {
-                ItemStack ghost = matching[0].copy();
-                ghost.setCount(1);
-                renderGhost(guiGraphics, ghost, leftPos + inputSlot.x, topPos + inputSlot.y);
+        int[] inputSlots = inputGhostSlotIndices();
+        for (int i = 0; i < Math.min(inputSlots.length, recipe.itemInputs().size()); i++) {
+            int slotIdx = inputSlots[i];
+            if (slotIdx < 0 || slotIdx >= menu.slots.size()) {
+                continue;
             }
+            Slot inputSlot = menu.slots.get(slotIdx);
+            if (inputSlot.hasItem()) {
+                continue;
+            }
+            ItemStack ghost = recipe.itemInputs().get(i).stack().copy();
+            ghost.setCount(1);
+            renderGhost(guiGraphics, ghost, leftPos + inputSlot.x, topPos + inputSlot.y);
         }
 
-        if (!outputSlot.hasItem()) {
-            ItemStack ghost = recipe.getOutput().copy();
-            ghost.setCount(1);
-            renderGhost(guiGraphics, ghost, leftPos + outputSlot.x, topPos + outputSlot.y);
+        int outputSlotIdx = outputGhostSlotIndex();
+        if (outputSlotIdx >= 0 && outputSlotIdx < menu.slots.size() && !recipe.itemOutputs().isEmpty()) {
+            Slot outputSlot = menu.slots.get(outputSlotIdx);
+            if (!outputSlot.hasItem()) {
+                ItemStack ghost = recipe.itemOutputs().get(0).stack().copy();
+                ghost.setCount(1);
+                renderGhost(guiGraphics, ghost, leftPos + outputSlot.x, topPos + outputSlot.y);
+            }
+        }
+        if (supportsFluidSlots()) {
+            int inputCount = Math.min(Math.min(fluidInputSlotCount(), inputFluidTankCount()), recipe.fluidInputs().size());
+            for (int i = 0; i < inputCount; i++) {
+                renderGhostFluidGlyph(
+                    guiGraphics,
+                    recipe.fluidInputs().get(i).fluidId(),
+                    leftPos + fluidInputSlotX(i) + 8,
+                    topPos + fluidInputSlotY(i) + 8,
+                    7
+                );
+            }
+            int outputCount = Math.min(Math.min(fluidOutputSlotCount(), outputFluidTankCount()), recipe.fluidOutputs().size());
+            for (int i = 0; i < outputCount; i++) {
+                renderGhostFluidGlyph(
+                    guiGraphics,
+                    recipe.fluidOutputs().get(i).fluidId(),
+                    leftPos + fluidOutputSlotX(i) + 8,
+                    topPos + fluidOutputSlotY(i) + 8,
+                    7
+                );
+            }
         }
     }
 
-    private RecipeHolder<ConstructorRecipe> getDisplayedRecipeHolder() {
-        return menu.getSelectedRecipe().map(recipe -> {
-            List<RecipeHolder<ConstructorRecipe>> recipes = menu.getAvailableRecipes();
-            for (RecipeHolder<ConstructorRecipe> holder : recipes) {
-                if (holder.value() == recipe) {
-                    return holder;
-                }
+    private void renderFluidSlots(GuiGraphics guiGraphics) {
+        int inputCount = Math.min(fluidInputSlotCount(), inputFluidTankCount());
+        for (int i = 0; i < inputCount; i++) {
+            int inputX = leftPos + fluidInputSlotX(i) + 8;
+            int inputY = topPos + fluidInputSlotY(i) + 8;
+            drawFluidCircleSlot(guiGraphics, inputX, inputY);
+            FluidVariant inputVariant = inputFluidVariant(i);
+            ResourceLocation inputFluidId = BuiltInRegistries.FLUID.getKey(inputVariant.getFluid());
+            if (inputFluidId != null && !inputVariant.isBlank()) {
+                drawFluidGlyph(guiGraphics, inputFluidId, inputX, inputY, 7);
+                drawFluidAmountOverlay(guiGraphics, inputX - 8, inputY - 8, formatFluidAmountHuman(inputFluidMb(i)));
+                hoverTargets.add(HoverTarget.fluid(inputX - 8, inputY - 8, 16, 16, inputFluidId, inputFluidMb(i), fluidHoverText(inputFluidId, inputFluidMb(i))));
             }
-            return null;
-        }).orElse(null);
+        }
+        int outputCount = Math.min(fluidOutputSlotCount(), outputFluidTankCount());
+        for (int i = 0; i < outputCount; i++) {
+            int outputX = leftPos + fluidOutputSlotX(i) + 8;
+            int outputY = topPos + fluidOutputSlotY(i) + 8;
+            drawFluidCircleSlot(guiGraphics, outputX, outputY);
+            FluidVariant outputVariant = outputFluidVariant(i);
+            ResourceLocation outputFluidId = BuiltInRegistries.FLUID.getKey(outputVariant.getFluid());
+            if (outputFluidId != null && !outputVariant.isBlank()) {
+                drawFluidGlyph(guiGraphics, outputFluidId, outputX, outputY, 7);
+                drawFluidAmountOverlay(guiGraphics, outputX - 8, outputY - 8, formatFluidAmountHuman(outputFluidMb(i)));
+                hoverTargets.add(HoverTarget.fluid(outputX - 8, outputY - 8, 16, 16, outputFluidId, outputFluidMb(i), fluidHoverText(outputFluidId, outputFluidMb(i))));
+            }
+        }
+    }
+
+    private void drawFluidCircleSlot(GuiGraphics guiGraphics, int centerX, int centerY) {
+        drawCircle(guiGraphics, centerX, centerY, FLUID_SLOT_RADIUS, FLUID_SLOT_BG);
+        drawCircle(guiGraphics, centerX, centerY, FLUID_SLOT_RADIUS - 1, FLUID_SLOT_INNER);
+    }
+
+    private String formatFluidName(ResourceLocation fluidId) {
+        if (fluidId == null) {
+            return "Fluid";
+        }
+        Fluid fluid = BuiltInRegistries.FLUID.getOptional(fluidId).orElse(null);
+        if (fluid == null) {
+            return "Fluid";
+        }
+        ItemStack bucket = new ItemStack(fluid.getBucket());
+        if (bucket.isEmpty()) {
+            return "Fluid";
+        }
+        String name = bucket.getHoverName().getString();
+        if (name.endsWith(" Bucket")) {
+            return name.substring(0, name.length() - " Bucket".length());
+        }
+        return name;
+    }
+
+    private String formatFluidAmountHuman(long mb) {
+        long safeMb = Math.max(0L, mb);
+        if (safeMb < 1000L) {
+            return safeMb + "mb";
+        }
+        if (safeMb % 1000L == 0L) {
+            return (safeMb / 1000L) + "b";
+        }
+        String value = String.format(Locale.ROOT, "%.1f", safeMb / 1000.0);
+        if (value.endsWith(".0")) {
+            value = value.substring(0, value.length() - 2);
+        }
+        return value + "b";
     }
 
     private MachineRecipeView getDisplayedRecipeView() {
@@ -520,22 +728,17 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
         guiGraphics.renderItem(stack, x, y);
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
         RenderSystem.disableBlend();
-        hoverItems.add(new HoverItem(x, y, stack.copy()));
+        hoverTargets.add(HoverTarget.item(x, y, 16, 16, stack.copy()));
     }
 
-    private void renderHoverTooltips(GuiGraphics guiGraphics, int mouseX, int mouseY) {
-        if (this.hoveredSlot != null && this.hoveredSlot.hasItem()) {
-            renderTooltip(guiGraphics, mouseX, mouseY);
-            return;
-        }
-        for (int i = hoverItems.size() - 1; i >= 0; i--) {
-            HoverItem item = hoverItems.get(i);
-            if (mouseX >= item.x && mouseX < item.x + 16 && mouseY >= item.y && mouseY < item.y + 16) {
-                guiGraphics.renderTooltip(font, item.stack, mouseX, mouseY);
-                return;
-            }
-        }
-        renderTooltip(guiGraphics, mouseX, mouseY);
+    private void renderGhostFluidGlyph(GuiGraphics guiGraphics, ResourceLocation fluidId, int centerX, int centerY, int radius) {
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 0.5F);
+        drawFluidGlyph(guiGraphics, fluidId, centerX, centerY, radius);
+        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+        RenderSystem.disableBlend();
+        hoverTargets.add(HoverTarget.fluid(centerX - radius, centerY - radius, radius * 2 + 1, radius * 2 + 1, fluidId, null, fluidHoverText(fluidId, null)));
     }
 
     @Override
@@ -653,7 +856,7 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
     }
 
     private void renderOverclockInfo(GuiGraphics guiGraphics) {
-        double clock = menu.getBlockEntity().getClockSpeedPercent();
+        double clock = menu.getMachineBlockEntity().getClockSpeedPercent();
 
         int x = leftPos + PROD_RIGHT_PANEL_X;
         int y = topPos + PROD_OVERCLOCK_Y;
@@ -672,7 +875,7 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
 
     private void renderLockedOverclockPlaceholder(GuiGraphics guiGraphics) {
         int x = leftPos + PROD_RIGHT_PANEL_X;
-        int y = topPos + PROD_OVERCLOCK_LOCKED_Y;
+        int y = topPos + shardSlotY();
         guiGraphics.blit(
             OVERCLOCK_LOCKED_TEXTURE,
             x,
@@ -689,17 +892,35 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
     private void renderRecipeEntry(GuiGraphics guiGraphics, RecipeEntry entry, int x, int y, int cellW, boolean hovered) {
         int bgColor = entry.index == previewRecipeIndex ? 0xFF9E6A37 : hovered ? 0xFF5A5A5A : 0xFF3A3A3A;
         guiGraphics.fill(x, y, x + cellW - 2, y + 40, bgColor);
-        boolean hasByproduct = !entry.byproductIcon.isEmpty();
+        boolean hasByproduct = !entry.byproductIcon.isEmpty() || entry.byproductFluidId != null;
         int iconY = y + 3;
         if (hasByproduct) {
-            int mainCenterX = x + cellW / 2 - 8;
-            int byCenterX = x + cellW / 2 + 8;
-            drawCircle(guiGraphics, mainCenterX, iconY + 8, 9, 0xAA262626);
-            drawCircle(guiGraphics, byCenterX, iconY + 8, 9, BYPRODUCT_ACCENT_COLOR);
-            guiGraphics.renderItem(entry.outputIcon, mainCenterX - 8, iconY);
-            guiGraphics.renderItem(entry.byproductIcon, byCenterX - 8, iconY);
+            int mainCenterX = x + cellW / 2;
+            int mainCenterY = iconY + 8;
+            drawCircle(guiGraphics, mainCenterX, mainCenterY, 9, 0xAA262626);
+            if (entry.primaryFluidId != null) {
+                drawFluidGlyph(guiGraphics, entry.primaryFluidId, mainCenterX, mainCenterY, 7);
+            } else {
+                guiGraphics.renderItem(entry.outputIcon, mainCenterX - 8, iconY);
+            }
+            int badgeCenterX = mainCenterX + 7;
+            int badgeCenterY = mainCenterY + 7;
+            drawCircle(guiGraphics, badgeCenterX, badgeCenterY, 6, BYPRODUCT_ACCENT_COLOR);
+            if (!entry.byproductIcon.isEmpty()) {
+                guiGraphics.pose().pushPose();
+                guiGraphics.pose().translate(badgeCenterX - 4, badgeCenterY - 4, 0);
+                guiGraphics.pose().scale(0.5F, 0.5F, 1.0F);
+                guiGraphics.renderItem(entry.byproductIcon, 0, 0);
+                guiGraphics.pose().popPose();
+            } else {
+                drawFluidGlyph(guiGraphics, entry.byproductFluidId, badgeCenterX, badgeCenterY, 4);
+            }
         } else {
-            guiGraphics.renderItem(entry.outputIcon, x + (cellW - 16) / 2 - 1, iconY);
+            if (entry.primaryFluidId != null) {
+                drawFluidGlyph(guiGraphics, entry.primaryFluidId, x + cellW / 2, iconY + 8, 7);
+            } else {
+                guiGraphics.renderItem(entry.outputIcon, x + (cellW - 16) / 2 - 1, iconY);
+            }
         }
         drawCenteredWrappedScaled(
             guiGraphics,
@@ -792,17 +1013,32 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
     private void rebuildRecipeEntries(List<MachineRecipeView> recipes) {
         recipeEntries.clear();
         String emptyName = Component.translatable("screen.factory_ld.constructor.select.empty_recipe").getString();
-        recipeEntries.add(new RecipeEntry(-1, emptyName, PRIMARY_CATEGORY, new ItemStack(Items.BARRIER), ItemStack.EMPTY, emptyName.toLowerCase(Locale.ROOT)));
+        recipeEntries.add(new RecipeEntry(-1, emptyName, PRIMARY_CATEGORY, new ItemStack(Items.BARRIER), ItemStack.EMPTY, null, null, emptyName.toLowerCase(Locale.ROOT)));
         for (int i = 0; i < recipes.size(); i++) {
             MachineRecipeView recipe = recipes.get(i);
-            ItemStack output = recipe.itemOutputs().isEmpty() ? ItemStack.EMPTY : recipe.itemOutputs().get(0).stack();
-            ItemStack byproduct = recipe.itemOutputs().size() > 1 ? recipe.itemOutputs().get(1).stack() : ItemStack.EMPTY;
+            boolean fluidPrimary = isFluidPrimary(recipe.id());
+            ItemStack output = fluidPrimary
+                ? ItemStack.EMPTY
+                : (recipe.itemOutputs().isEmpty() ? ItemStack.EMPTY : recipe.itemOutputs().get(0).stack());
+            ResourceLocation primaryFluidId = fluidPrimary && !recipe.fluidOutputs().isEmpty()
+                ? recipe.fluidOutputs().get(0).fluidId()
+                : null;
+            ItemStack byproduct = fluidPrimary
+                ? (recipe.itemOutputs().isEmpty() ? ItemStack.EMPTY : recipe.itemOutputs().get(0).stack())
+                : (recipe.itemOutputs().size() > 1 ? recipe.itemOutputs().get(1).stack() : ItemStack.EMPTY);
+            ResourceLocation byproductFluidId = fluidPrimary
+                ? (recipe.fluidOutputs().size() > 1 ? recipe.fluidOutputs().get(1).fluidId() : null)
+                : (byproduct.isEmpty() && !recipe.fluidOutputs().isEmpty() ? recipe.fluidOutputs().get(0).fluidId() : null);
             String name = getRecipeNameText(recipe);
             String category = recipe.category();
-            String outputName = output.getHoverName().getString();
-            String byproductName = byproduct.isEmpty() ? "" : byproduct.getHoverName().getString();
+            String outputName = fluidPrimary
+                ? formatFluidName(primaryFluidId)
+                : output.getHoverName().getString();
+            String byproductName = !byproduct.isEmpty()
+                ? byproduct.getHoverName().getString()
+                : (byproductFluidId == null ? "" : formatFluidName(byproductFluidId));
             String searchKey = (name + " " + outputName + " " + byproductName).toLowerCase(Locale.ROOT);
-            recipeEntries.add(new RecipeEntry(i, name, category, output, byproduct, searchKey));
+            recipeEntries.add(new RecipeEntry(i, name, category, output, byproduct, primaryFluidId, byproductFluidId, searchKey));
         }
     }
 
@@ -912,49 +1148,76 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
         int panelW = getPreviewWidth();
         int centerX = panelX + panelW / 2;
         int y = getContentTop() + 6;
-        MachineItemStackView primaryOutput = recipe.itemOutputs().isEmpty() ? new MachineItemStackView(ItemStack.EMPTY, 1) : recipe.itemOutputs().get(0);
-        MachineItemStackView byproductOutputView = recipe.itemOutputs().size() > 1 ? recipe.itemOutputs().get(1) : new MachineItemStackView(ItemStack.EMPTY, 0);
-        ItemStack mainOutput = primaryOutput.stack();
+        boolean fluidPrimary = isFluidPrimary(recipe.id());
+        MachineItemStackView primaryItem = fluidPrimary
+            ? new MachineItemStackView(ItemStack.EMPTY, 0)
+            : (recipe.itemOutputs().isEmpty() ? new MachineItemStackView(ItemStack.EMPTY, 1) : recipe.itemOutputs().get(0));
+        MachineFluidView primaryFluid = fluidPrimary && !recipe.fluidOutputs().isEmpty() ? recipe.fluidOutputs().get(0) : null;
+        MachineItemStackView byproductOutputView = fluidPrimary
+            ? (recipe.itemOutputs().isEmpty() ? new MachineItemStackView(ItemStack.EMPTY, 0) : recipe.itemOutputs().get(0))
+            : (recipe.itemOutputs().size() > 1 ? recipe.itemOutputs().get(1) : new MachineItemStackView(ItemStack.EMPTY, 0));
+        MachineFluidView byproductFluid = fluidPrimary
+            ? (recipe.fluidOutputs().size() > 1 ? recipe.fluidOutputs().get(1) : null)
+            : (recipe.itemOutputs().size() > 1 || recipe.fluidOutputs().isEmpty() ? null : recipe.fluidOutputs().get(0));
+        ItemStack mainOutput = primaryItem.stack();
         ItemStack byproductOutput = byproductOutputView.stack();
+        boolean hasByproduct = !byproductOutput.isEmpty() || byproductFluid != null;
 
         Component title;
-        if (!byproductOutput.isEmpty()) {
+        if (hasByproduct) {
+            Component byproductName = !byproductOutput.isEmpty()
+                ? byproductOutput.getHoverName()
+                : Component.literal(formatFluidName(byproductFluid.fluidId()));
+            int byproductAmount = !byproductOutput.isEmpty()
+                ? byproductOutputView.amountPerCraft()
+                : (int)Math.max(1L, byproductFluid.amountMb());
             title = Component.translatable(
                 "screen.factory_ld.constructor.select.preview.title_with_byproduct",
-                primaryOutput.amountPerCraft(),
+                fluidPrimary ? formatFluidAmountHuman(primaryFluid.amountMb()) : primaryItem.amountPerCraft(),
                 recipeNameComponent(recipe),
-                byproductOutputView.amountPerCraft(),
-                byproductOutput.getHoverName()
+                byproductAmount,
+                byproductName
             );
         } else {
             title = Component.translatable(
                 "screen.factory_ld.constructor.select.preview.title",
-                primaryOutput.amountPerCraft(),
+                fluidPrimary ? formatFluidAmountHuman(primaryFluid.amountMb()) : primaryItem.amountPerCraft(),
                 recipeNameComponent(recipe)
             );
         }
         y = drawCenteredWrappedScaled(guiGraphics, title, centerX, y, panelW - 10, 3, 0xF0F0F0, PREVIEW_TITLE_SCALE) + 2;
 
-        ItemStack output = mainOutput.copy();
-        output.setCount(1);
         int iconX = centerX - 16;
         int iconY = y;
-        guiGraphics.pose().pushPose();
-        guiGraphics.pose().translate(iconX, iconY, 0);
-        guiGraphics.pose().scale(2.0F, 2.0F, 1.0F);
-        guiGraphics.renderItem(output, 0, 0);
-        guiGraphics.pose().popPose();
-        if (!byproductOutput.isEmpty()) {
+        if (hasByproduct) {
+            drawCircle(guiGraphics, centerX, iconY + 16, 18, 0xAA262626);
+        }
+        if (fluidPrimary && primaryFluid != null) {
+            drawFluidGlyph(guiGraphics, primaryFluid.fluidId(), centerX, iconY + 16, 14);
+        } else {
+            ItemStack output = mainOutput.copy();
+            output.setCount(1);
+            guiGraphics.pose().pushPose();
+            guiGraphics.pose().translate(iconX, iconY, 0);
+            guiGraphics.pose().scale(2.0F, 2.0F, 1.0F);
+            guiGraphics.renderItem(output, 0, 0);
+            guiGraphics.pose().popPose();
+        }
+        if (hasByproduct) {
             int badgeCenterX = centerX + 24;
             int badgeCenterY = iconY + 28;
             drawCircle(guiGraphics, badgeCenterX, badgeCenterY, 11, BYPRODUCT_ACCENT_COLOR);
-            ItemStack by = byproductOutput.copy();
-            by.setCount(1);
-            guiGraphics.pose().pushPose();
-            guiGraphics.pose().translate(badgeCenterX - 6, badgeCenterY - 6, 0);
-            guiGraphics.pose().scale(0.75F, 0.75F, 1.0F);
-            guiGraphics.renderItem(by, 0, 0);
-            guiGraphics.pose().popPose();
+            if (!byproductOutput.isEmpty()) {
+                ItemStack by = byproductOutput.copy();
+                by.setCount(1);
+                guiGraphics.pose().pushPose();
+                guiGraphics.pose().translate(badgeCenterX - 6, badgeCenterY - 6, 0);
+                guiGraphics.pose().scale(0.75F, 0.75F, 1.0F);
+                guiGraphics.renderItem(by, 0, 0);
+                guiGraphics.pose().popPose();
+            } else {
+                drawFluidGlyph(guiGraphics, byproductFluid.fluidId(), badgeCenterX, badgeCenterY, 7);
+            }
         }
         y += 40;
 
@@ -970,13 +1233,15 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
             0xD0D0D0
         );
 
-        if (!byproductOutput.isEmpty()) {
+        if (hasByproduct) {
             y += 6;
             guiGraphics.drawCenteredString(font, Component.translatable("screen.factory_ld.constructor.select.preview.byproduct"), centerX, y, 0xD0D0D0);
             y += 12;
             y = drawCenteredWrapped(
                 guiGraphics,
-                outputDescriptionComponent(byproductOutput),
+                !byproductOutput.isEmpty()
+                    ? outputDescriptionComponent(byproductOutput)
+                    : fluidDescriptionComponent(byproductFluid.fluidId()),
                 centerX,
                 y,
                 panelW - 10,
@@ -1004,12 +1269,17 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
             costStacks.add(stack);
         }
         if (!costStacks.isEmpty()) {
-            int totalW = costStacks.size() * 16 + (costStacks.size() - 1) * 2;
+            int totalEntries = costStacks.size() + recipe.fluidInputs().size();
+            int totalW = totalEntries * 16 + (totalEntries - 1) * 2;
             int costX = centerX - totalW / 2;
             for (ItemStack costStack : costStacks) {
                 guiGraphics.renderItem(costStack, costX, y);
                 guiGraphics.renderItemDecorations(font, costStack, costX, y);
-                hoverItems.add(new HoverItem(costX, y, costStack.copy()));
+                hoverTargets.add(HoverTarget.item(costX, y, 16, 16, costStack.copy()));
+                costX += 18;
+            }
+            for (MachineFluidView fluidInput : recipe.fluidInputs()) {
+                renderFluidCostEntry(guiGraphics, fluidInput.fluidId(), fluidInput.amountMb(), costX, y);
                 costX += 18;
             }
         }
@@ -1042,18 +1312,18 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
 
     private void copyCurrentSettings() {
         ResourceLocation selectedRecipeId = menu.getSelectedRecipeId();
-        double clock = menu.getBlockEntity().getClockSpeedPercent();
-        COPIED_SETTINGS.put(MACHINE_TYPE_KEY, new CopiedSettings(selectedRecipeId, clock));
+        double clock = menu.getMachineBlockEntity().getClockSpeedPercent();
+        COPIED_SETTINGS.put(machineTypeKey(), new CopiedSettings(selectedRecipeId, clock));
     }
 
     private void pasteCopiedSettings() {
-        CopiedSettings copied = COPIED_SETTINGS.get(MACHINE_TYPE_KEY);
+        CopiedSettings copied = COPIED_SETTINGS.get(machineTypeKey());
         if (copied == null) {
             return;
         }
         previewRecipeIndex = -2;
         ClientPlayNetworking.send(new ModNetworking.PasteMachineSettingsPayload(
-            menu.getBlockEntity().getBlockPos(),
+            menu.getMachineBlockEntity().getBlockPos(),
             copied.recipeId(),
             (int)Math.round(copied.clockPercent() * 10000.0)
         ));
@@ -1064,8 +1334,8 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
         if (menu.getSelectedRecipeId() != null) {
             return true;
         }
-        for (int slot = 0; slot < ConstructorBlockEntity.SLOT_COUNT; slot++) {
-            if (!menu.getBlockEntity().getItems().get(slot).isEmpty()) {
+        for (int slot = 0; slot < menu.getMachineBlockEntity().getContainerSize(); slot++) {
+            if (!menu.getMachineBlockEntity().getItems().get(slot).isEmpty()) {
                 return true;
             }
         }
@@ -1094,6 +1364,17 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
             if (I18n.exists(key)) {
                 return Component.translatable(key);
             }
+        }
+        return Component.translatable("screen.factory_ld.constructor.select.preview.no_description");
+    }
+
+    private Component fluidDescriptionComponent(ResourceLocation fluidId) {
+        if (fluidId == null) {
+            return Component.translatable("screen.factory_ld.constructor.select.preview.no_description");
+        }
+        String key = "fluid." + fluidId.getNamespace() + "." + fluidId.getPath() + ".description";
+        if (I18n.exists(key)) {
+            return Component.translatable(key);
         }
         return Component.translatable("screen.factory_ld.constructor.select.preview.no_description");
     }
@@ -1191,6 +1472,145 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
         }
     }
 
+    private void drawFluidGlyph(GuiGraphics guiGraphics, ResourceLocation fluidId, int centerX, int centerY, int radius) {
+        TextureAtlasSprite sprite = getFluidSprite(fluidId);
+        if (sprite == null) {
+            drawCircle(guiGraphics, centerX, centerY, radius, fluidColor(fluidId));
+            String letter = "F";
+            if (fluidId != null && !fluidId.getPath().isBlank()) {
+                letter = fluidId.getPath().substring(0, 1).toUpperCase(Locale.ROOT);
+            }
+            int textWidth = font.width(letter);
+            guiGraphics.drawString(font, letter, centerX - textWidth / 2, centerY - 4, 0xFFFFFFFF, false);
+            return;
+        }
+        int diameter = radius * 2 + 1;
+        int left = centerX - radius;
+        int right = centerX + radius;
+        int top = centerY - radius;
+        int tint = fluidId != null && fluidId.toString().toLowerCase(Locale.ROOT).contains("water") ? 0xFF3F76E4 : 0xFFFFFFFF;
+        float r = ((tint >> 16) & 0xFF) / 255.0F;
+        float g = ((tint >> 8) & 0xFF) / 255.0F;
+        float b = (tint & 0xFF) / 255.0F;
+        guiGraphics.setColor(r, g, b, 1.0F);
+        guiGraphics.blit(left, top, 0, diameter, diameter, sprite);
+        guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
+
+        // Mask corners after drawing full sprite to avoid UV resampling darkening.
+        for (int dy = -radius; dy <= radius; dy++) {
+            int span = (int)Math.floor(Math.sqrt(radius * radius - dy * dy));
+            int rowY = centerY + dy;
+            int leftMaskEnd = centerX - span;
+            int rightMaskStart = centerX + span + 1;
+            if (leftMaskEnd > left) {
+                guiGraphics.fill(left, rowY, leftMaskEnd, rowY + 1, FLUID_SLOT_INNER);
+            }
+            if (rightMaskStart <= right) {
+                guiGraphics.fill(rightMaskStart, rowY, right + 1, rowY + 1, FLUID_SLOT_INNER);
+            }
+        }
+    }
+
+    private void drawFluidAmountOverlay(GuiGraphics guiGraphics, int slotX, int slotY, String label) {
+        guiGraphics.pose().pushPose();
+        float scale = 0.5F;
+        guiGraphics.pose().scale(scale, scale, 1.0F);
+        int x = Math.round((slotX + 16 - font.width(label) * scale) / scale);
+        int y = Math.round((slotY + 12) / scale);
+        guiGraphics.drawString(font, label, x, y, 0xFFFFFFFF, true);
+        guiGraphics.pose().popPose();
+    }
+
+    private int fluidColor(ResourceLocation fluidId) {
+        if (fluidId == null) {
+            return 0xFF6B6B6B;
+        }
+        String key = fluidId.toString().toLowerCase(Locale.ROOT);
+        if (key.contains("water")) {
+            return 0xFF2B7CC9;
+        }
+        if (key.contains("lava")) {
+            return 0xFFCF6A2A;
+        }
+        if (key.contains("oil")) {
+            return 0xFF2A2A2A;
+        }
+        if (key.contains("fuel")) {
+            return 0xFFD88C2D;
+        }
+        return 0xFF5D8AA8;
+    }
+
+    private TextureAtlasSprite getFluidSprite(ResourceLocation fluidId) {
+        if (minecraft == null || fluidId == null) {
+            return null;
+        }
+        Fluid fluid = BuiltInRegistries.FLUID.getOptional(fluidId).orElse(Fluids.EMPTY);
+        if (fluid == Fluids.EMPTY) {
+            return null;
+        }
+        return minecraft.getBlockRenderer()
+            .getBlockModelShaper()
+            .getParticleIcon(fluid.defaultFluidState().createLegacyBlock());
+    }
+
+    private void renderFluidCostEntry(GuiGraphics guiGraphics, ResourceLocation fluidId, long amountMb, int x, int y) {
+        guiGraphics.blitSprite(SLOT_SPRITE, x - 1, y - 1, 18, 18);
+        drawFluidGlyph(guiGraphics, fluidId, x + 8, y + 8, 7);
+        drawFluidAmountOverlay(guiGraphics, x, y, formatFluidAmountHuman(amountMb));
+        hoverTargets.add(HoverTarget.fluid(x, y, 16, 16, fluidId, amountMb, fluidHoverText(fluidId, amountMb)));
+    }
+
+    private Component fluidHoverText(ResourceLocation fluidId, Long amountMb) {
+        String label = amountMb == null
+            ? formatFluidName(fluidId)
+            : Math.max(0L, amountMb) + " mB " + formatFluidName(fluidId);
+        return Component.literal(label);
+    }
+
+    public FluidHoverInfo getFluidHoverInfoAt(int mouseX, int mouseY) {
+        for (int i = hoverTargets.size() - 1; i >= 0; i--) {
+            HoverTarget target = hoverTargets.get(i);
+            if (!target.contains(mouseX, mouseY)) {
+                continue;
+            }
+            if (target.fluidId != null) {
+                return new FluidHoverInfo(target.fluidId, target.fluidAmountMb);
+            }
+        }
+        return null;
+    }
+
+    private void renderHoverTooltips(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+        if (this.hoveredSlot != null && this.hoveredSlot.hasItem()) {
+            renderTooltip(guiGraphics, mouseX, mouseY);
+            return;
+        }
+        for (int i = hoverTargets.size() - 1; i >= 0; i--) {
+            HoverTarget target = hoverTargets.get(i);
+            if (!target.contains(mouseX, mouseY)) {
+                continue;
+            }
+            if (target.stack != null && !target.stack.isEmpty()) {
+                guiGraphics.renderTooltip(font, target.stack, mouseX, mouseY);
+            } else if (target.text != null) {
+                if (target.fluidId != null && minecraft != null && minecraft.options.advancedItemTooltips) {
+                    guiGraphics.renderTooltip(
+                        font,
+                        List.of(target.text, Component.literal(target.fluidId.toString()).withStyle(ChatFormatting.DARK_GRAY)),
+                        java.util.Optional.empty(),
+                        mouseX,
+                        mouseY
+                    );
+                } else {
+                    guiGraphics.renderTooltip(font, target.text, mouseX, mouseY);
+                }
+            }
+            return;
+        }
+        renderTooltip(guiGraphics, mouseX, mouseY);
+    }
+
     private int compareRecipeEntries(RecipeEntry a, RecipeEntry b) {
         if (a.index == -1 && b.index != -1) {
             return -1;
@@ -1208,7 +1628,7 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
         if (currentTab != Tab.PRODUCTION || !menu.isOverclockUnlocked()) {
             return;
         }
-        double current = menu.getBlockEntity().getClockSpeedPercent();
+        double current = menu.getMachineBlockEntity().getClockSpeedPercent();
         String desired = formatPercentValue(current);
         if (!clockBox.getValue().equals(desired)) {
             clockBox.setValue(desired);
@@ -1219,7 +1639,7 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
         if (!menu.isOverclockUnlocked()) {
             return;
         }
-        double current = menu.getBlockEntity().getClockSpeedPercent();
+        double current = menu.getMachineBlockEntity().getClockSpeedPercent();
         submitClockValue(current + deltaPercent);
     }
 
@@ -1243,7 +1663,7 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
             return;
         }
         ClientPlayNetworking.send(new ModNetworking.SetClockSpeedPayload(
-            menu.getBlockEntity().getBlockPos(),
+            menu.getMachineBlockEntity().getBlockPos(),
             (int)Math.round(percent * 10000.0)
         ));
     }
@@ -1267,7 +1687,16 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
         return String.format(Locale.ROOT, "%.2f MW", powerMw);
     }
 
-    private record RecipeEntry(int index, String name, String category, ItemStack outputIcon, ItemStack byproductIcon, String searchKey) {
+    private record RecipeEntry(
+        int index,
+        String name,
+        String category,
+        ItemStack outputIcon,
+        ItemStack byproductIcon,
+        ResourceLocation primaryFluidId,
+        ResourceLocation byproductFluidId,
+        String searchKey
+    ) {
     }
 
     private record Layout(Map<String, List<RecipeEntry>> byCategory, List<String> categories, int contentHeight) {
@@ -1281,7 +1710,7 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
         PRODUCTION
     }
 
-    private enum ProductionStatus {
+    protected enum ProductionStatus {
         IDLE("idle"),
         WORKING("working"),
         NO_POWER("no_power");
@@ -1293,6 +1722,41 @@ public class ConstructorScreen extends AbstractContainerScreen<ConstructorScreen
         }
     }
 
-    private record HoverItem(int x, int y, ItemStack stack) {
+    private static final class HoverTarget {
+        private final int x;
+        private final int y;
+        private final int w;
+        private final int h;
+        private final ItemStack stack;
+        private final Component text;
+        private final ResourceLocation fluidId;
+        private final Long fluidAmountMb;
+
+        private HoverTarget(int x, int y, int w, int h, ItemStack stack, Component text, ResourceLocation fluidId, Long fluidAmountMb) {
+            this.x = x;
+            this.y = y;
+            this.w = w;
+            this.h = h;
+            this.stack = stack;
+            this.text = text;
+            this.fluidId = fluidId;
+            this.fluidAmountMb = fluidAmountMb;
+        }
+
+        private static HoverTarget item(int x, int y, int w, int h, ItemStack stack) {
+            return new HoverTarget(x, y, w, h, stack, null, null, null);
+        }
+
+        private static HoverTarget text(int x, int y, int w, int h, Component text) {
+            return new HoverTarget(x, y, w, h, ItemStack.EMPTY, text, null, null);
+        }
+
+        private static HoverTarget fluid(int x, int y, int w, int h, ResourceLocation fluidId, Long fluidAmountMb, Component text) {
+            return new HoverTarget(x, y, w, h, ItemStack.EMPTY, text, fluidId, fluidAmountMb);
+        }
+
+        private boolean contains(int mx, int my) {
+            return mx >= x && mx < x + w && my >= y && my < y + h;
+        }
     }
 }

@@ -1,0 +1,43 @@
+{
+  "type": "factory_ld:blender",
+  "recipe_name": "Test Alloy Slurry 1",
+  "category": "Standart Parts",
+  "research_group": "base",
+  "item_inputs": [
+    {
+      "ingredient": {
+        "item": "minecraft:iron_ingot"
+      },
+      "count": 1
+    },
+    {
+      "ingredient": {
+        "item": "minecraft:copper_ingot"
+      },
+      "count": 1
+    }
+  ],
+  "fluid_inputs": [
+    {
+      "id": "minecraft:water",
+      "amount_mb": 200
+    },
+    {
+      "id": "minecraft:lava",
+      "amount_mb": 50
+    }
+  ],
+  "item_outputs": [
+    {
+      "id": "minecraft:iron_nugget",
+      "count": 6
+    }
+  ],
+  "fluid_outputs": [
+    {
+      "id": "minecraft:water",
+      "amount_mb": 120
+    }
+  ],
+  "craft_time": 180
+}

@@ -14,11 +14,11 @@ public final class ModCreativeTabs {
         FactoryLdMod.id("main"),
         FabricItemGroup.builder()
             .title(Component.translatable("itemGroup.factory_ld.main"))
-            .icon(() -> new ItemStack(ModBlocks.CONSTRUCTOR))
+            .icon(() -> new ItemStack(ModBlocks.requireMachineBlock("constructor")))
             .displayItems((parameters, output) -> {
-                output.accept(ModBlocks.CONSTRUCTOR);
-                output.accept(ModBlocks.ASSEMBLER);
-                output.accept(ModBlocks.REFINERY);
+                for (MachineDescriptors.Descriptor descriptor : MachineDescriptors.ALL) {
+                    output.accept(ModBlocks.requireMachineBlock(descriptor.id()));
+                }
                 output.accept(ModBlocks.POWER_EMITTER);
             })
             .build()

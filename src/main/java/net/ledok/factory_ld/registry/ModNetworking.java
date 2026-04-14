@@ -3,14 +3,10 @@ package net.ledok.factory_ld.registry;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.ledok.factory_ld.FactoryLdMod;
-import net.ledok.factory_ld.world.block.entity.AssemblerBlockEntity;
-import net.ledok.factory_ld.world.block.entity.ConstructorBlockEntity;
+import net.ledok.factory_ld.world.block.entity.AbstractMachineBlockEntity;
 import net.ledok.factory_ld.world.block.entity.OverclockMachineEntity;
 import net.ledok.factory_ld.world.block.entity.OverclockMachineHelper;
-import net.ledok.factory_ld.world.block.entity.RefineryBlockEntity;
-import net.ledok.factory_ld.world.screen.AssemblerScreenHandler;
-import net.ledok.factory_ld.world.screen.ConstructorScreenHandler;
-import net.ledok.factory_ld.world.screen.RefineryScreenHandler;
+import net.ledok.factory_ld.world.screen.MachineMenuContext;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -39,55 +35,29 @@ public final class ModNetworking {
     }
 
     private static void handleSetClockSpeed(ServerPlayer player, BlockPos pos, int scaled) {
-        if (player.level().getBlockEntity(pos) instanceof ConstructorBlockEntity be) {
-            if (!(player.containerMenu instanceof ConstructorScreenHandler screenHandler)) {
-                return;
-            }
-            if (screenHandler.getBlockEntity() != be) {
-                return;
-            }
-            applySetClockSpeed(be, scaled, screenHandler.isOverclockUnlocked());
+        if (!(player.containerMenu instanceof MachineMenuContext menu)) {
             return;
         }
-        if (player.level().getBlockEntity(pos) instanceof AssemblerBlockEntity be) {
-            if (!(player.containerMenu instanceof AssemblerScreenHandler screenHandler)) {
-                return;
-            }
-            if (screenHandler.getBlockEntity() != be) {
-                return;
-            }
-            applySetClockSpeed(be, scaled, screenHandler.isOverclockUnlocked());
+        if (!(player.level().getBlockEntity(pos) instanceof AbstractMachineBlockEntity machine)) {
             return;
         }
-        if (player.level().getBlockEntity(pos) instanceof RefineryBlockEntity be) {
-            if (!(player.containerMenu instanceof RefineryScreenHandler screenHandler)) {
-                return;
-            }
-            if (screenHandler.getBlockEntity() != be) {
-                return;
-            }
-            applySetClockSpeed(be, scaled, screenHandler.isOverclockUnlocked());
+        if (menu.getMachineBlockEntity() != machine) {
+            return;
         }
+        applySetClockSpeed(machine, scaled, menu.isOverclockUnlocked());
     }
 
     private static void handlePasteMachineSettings(ServerPlayer player, BlockPos pos, ResourceLocation recipeId, int scaledClock) {
-        if (player.containerMenu instanceof ConstructorScreenHandler constructorMenu
-            && player.level().getBlockEntity(pos) instanceof ConstructorBlockEntity constructorBe
-            && constructorMenu.getBlockEntity() == constructorBe) {
-            OverclockMachineHelper.applyPastedSettings(player.getInventory(), recipeId, scaledClock, constructorMenu.isOverclockUnlocked(), constructorBe);
+        if (!(player.containerMenu instanceof MachineMenuContext menu)) {
             return;
         }
-        if (player.containerMenu instanceof AssemblerScreenHandler assemblerMenu
-            && player.level().getBlockEntity(pos) instanceof AssemblerBlockEntity assemblerBe
-            && assemblerMenu.getBlockEntity() == assemblerBe) {
-            OverclockMachineHelper.applyPastedSettings(player.getInventory(), recipeId, scaledClock, assemblerMenu.isOverclockUnlocked(), assemblerBe);
+        if (!(player.level().getBlockEntity(pos) instanceof AbstractMachineBlockEntity machine)) {
             return;
         }
-        if (player.containerMenu instanceof RefineryScreenHandler refineryMenu
-            && player.level().getBlockEntity(pos) instanceof RefineryBlockEntity refineryBe
-            && refineryMenu.getBlockEntity() == refineryBe) {
-            OverclockMachineHelper.applyPastedSettings(player.getInventory(), recipeId, scaledClock, refineryMenu.isOverclockUnlocked(), refineryBe);
+        if (menu.getMachineBlockEntity() != machine) {
+            return;
         }
+        OverclockMachineHelper.applyPastedSettings(player.getInventory(), recipeId, scaledClock, menu.isOverclockUnlocked(), machine);
     }
 
     private static void applySetClockSpeed(OverclockMachineEntity machine, int scaled, boolean overclockUnlocked) {

@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "factory_ld:block/foundry"
+    }
+  }
+}

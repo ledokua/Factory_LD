@@ -7,7 +7,7 @@ import java.util.stream.Collectors;
 
 import net.ledok.factory_ld.config.FactoryLdConfig;
 import net.ledok.factory_ld.FactoryLdMod;
-import net.ledok.factory_ld.world.recipe.ConstructorRecipe;
+import net.ledok.factory_ld.world.recipe.MachineRecipeDefinition;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -104,15 +104,15 @@ public final class ResearchManager {
     public static Set<String> getAllGroups(ServerLevel level) {
         return allRecipes(level)
             .map(RecipeHolder::value)
-            .filter(ConstructorRecipe.class::isInstance)
-            .map(ConstructorRecipe.class::cast)
-            .map(ConstructorRecipe::getResearchGroup)
+            .filter(MachineRecipeDefinition.class::isInstance)
+            .map(MachineRecipeDefinition.class::cast)
+            .map(MachineRecipeDefinition::getResearchGroup)
             .collect(Collectors.toSet());
     }
 
     public static Set<ResourceLocation> getRecipesByGroup(ServerLevel level, String group) {
         return allRecipes(level)
-            .filter(entry -> entry.value() instanceof ConstructorRecipe recipe && recipe.getResearchGroup().equals(group))
+            .filter(entry -> entry.value() instanceof MachineRecipeDefinition recipe && recipe.getResearchGroup().equals(group))
             .map(RecipeHolder::id)
             .collect(Collectors.toSet());
     }
@@ -192,7 +192,7 @@ public final class ResearchManager {
         if (holder.isEmpty()) {
             return Optional.empty();
         }
-        if (holder.get().value() instanceof ConstructorRecipe recipe) {
+        if (holder.get().value() instanceof MachineRecipeDefinition recipe) {
             return Optional.of(recipe.getResearchGroup());
         }
         return Optional.empty();
@@ -203,7 +203,7 @@ public final class ResearchManager {
             return Set.of();
         }
         return allRecipes(level)
-            .filter(entry -> entry.value() instanceof ConstructorRecipe recipe && groups.contains(recipe.getResearchGroup()))
+            .filter(entry -> entry.value() instanceof MachineRecipeDefinition recipe && groups.contains(recipe.getResearchGroup()))
             .map(RecipeHolder::id)
             .collect(Collectors.toSet());
     }

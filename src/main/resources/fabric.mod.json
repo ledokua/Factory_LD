@@ -13,6 +13,9 @@
     "fabric-datagen": [
       "net.ledok.factory_ld.client.FactoryLdModDataGenerator"
     ],
+    "emi": [
+      "net.ledok.factory_ld.client.compat.emi.FactoryLdEmiPlugin"
+    ],
     "client": [
       "net.ledok.factory_ld.client.FactoryLdModClient"
     ],

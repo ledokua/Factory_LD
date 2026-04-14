@@ -1,5 +1,7 @@
 package net.ledok.factory_ld.world.block.entity;
 
+import java.util.Optional;
+
 import net.ledok.factory_ld.inventory.ImplementedInventory;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
@@ -9,33 +11,31 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 
 public abstract class AbstractMachineBlockEntity extends BlockEntity implements ImplementedInventory, OverclockMachineEntity {
     protected final NonNullList<ItemStack> items;
+    protected final MachineSpec machineSpec;
     protected ResourceLocation selectedRecipeId;
     protected double progress;
     protected double clockSpeedPercent = 100.0;
     protected double energyStored;
-
-    private final double basePowerMw;
-    private final double energyCapacityMj;
 
     protected AbstractMachineBlockEntity(
         BlockEntityType<?> type,
         BlockPos pos,
         BlockState state,
         int slotCount,
-        double basePowerMw,
-        double energyCapacityMj
+        MachineSpec machineSpec
     ) {
         super(type, pos, state);
+        this.machineSpec = machineSpec;
         this.items = NonNullList.withSize(slotCount, ItemStack.EMPTY);
-        this.basePowerMw = basePowerMw;
-        this.energyCapacityMj = energyCapacityMj;
-        this.energyStored = energyCapacityMj;
+        this.energyStored = machineSpec.energyCapacityMj();
     }
 
     @Override
@@ -61,6 +61,10 @@ public abstract class AbstractMachineBlockEntity extends BlockEntity implements 
         return selectedRecipeId;
     }
 
+    public MachineSpec getMachineSpec() {
+        return machineSpec;
+    }
+
     @Override
     public void setSelectedRecipeId(ResourceLocation id) {
         if (id != null && !isRecipeIdValid(id)) {
@@ -80,8 +84,12 @@ public abstract class AbstractMachineBlockEntity extends BlockEntity implements 
     }
 
     public int getShardCount() {
+        if (!machineSpec.overclockEnabled()) {
+            return 0;
+        }
         int count = 0;
-        for (int slot = getShardSlotStart(); slot < getShardSlotStart() + getShardSlotCount(); slot++) {
+        int shardSlots = Math.min(getShardSlotCount(), machineSpec.shardSlots());
+        for (int slot = getShardSlotStart(); slot < getShardSlotStart() + shardSlots; slot++) {
             if (!items.get(slot).isEmpty()) {
                 count++;
             }
@@ -91,6 +99,9 @@ public abstract class AbstractMachineBlockEntity extends BlockEntity implements 
 
     @Override
     public double getMaxClockSpeedPercent() {
+        if (!machineSpec.overclockEnabled()) {
+            return 100.0;
+        }
         double max = 100.0 + 50.0 * getShardCount();
         return Math.min(250.0, max);
     }
@@ -122,14 +133,14 @@ public abstract class AbstractMachineBlockEntity extends BlockEntity implements 
     }
 
     public double getEnergyCapacity() {
-        return energyCapacityMj;
+        return machineSpec.energyCapacityMj();
     }
 
     public double addEnergy(double amountMj) {
         if (amountMj <= 0.0) {
             return 0.0;
         }
-        double accepted = Math.min(amountMj, energyCapacityMj - energyStored);
+        double accepted = Math.min(amountMj, machineSpec.energyCapacityMj() - energyStored);
         if (accepted <= 0.0) {
             return 0.0;
         }
@@ -140,7 +151,55 @@ public abstract class AbstractMachineBlockEntity extends BlockEntity implements 
 
     public double getPowerUsageMw() {
         double speed = clockSpeedPercent / 100.0;
-        return basePowerMw * Math.pow(speed, 1.321928);
+        return machineSpec.basePowerMw() * Math.pow(speed, 1.321928);
+    }
+
+    protected void resetProgress() {
+        progress = 0.0;
+    }
+
+    protected double getClockSpeedMultiplier() {
+        return Math.max(0.01, clockSpeedPercent / 100.0);
+    }
+
+    protected boolean consumePowerForTick() {
+        double powerPerTick = getPowerUsageMw() / 20.0;
+        if (energyStored < powerPerTick) {
+            return false;
+        }
+        energyStored = Math.max(0.0, energyStored - powerPerTick);
+        return true;
+    }
+
+    protected void advanceProgressTick() {
+        progress += getClockSpeedMultiplier();
+    }
+
+    protected boolean isCraftComplete(int craftTime) {
+        return progress >= craftTime;
+    }
+
+    protected void consumeCraftProgress(int craftTime) {
+        progress -= craftTime;
+    }
+
+    protected boolean processCraftingTick(int craftTimeTicks, boolean canProcess, Runnable onCraftCompleted) {
+        if (!canProcess) {
+            resetProgress();
+            return false;
+        }
+        if (!consumePowerForTick()) {
+            resetProgress();
+            return false;
+        }
+
+        advanceProgressTick();
+        if (isCraftComplete(craftTimeTicks)) {
+            consumeCraftProgress(craftTimeTicks);
+            onCraftCompleted.run();
+        }
+        setChanged();
+        return true;
     }
 
     protected void loadMachineData(CompoundTag nbt) {
@@ -161,7 +220,7 @@ public abstract class AbstractMachineBlockEntity extends BlockEntity implements 
         if (nbt.contains("EnergyStored")) {
             energyStored = nbt.getDouble("EnergyStored");
         } else {
-            energyStored = energyCapacityMj;
+            energyStored = machineSpec.energyCapacityMj();
         }
         clampClockSpeed();
     }
@@ -197,5 +256,13 @@ public abstract class AbstractMachineBlockEntity extends BlockEntity implements 
             return max;
         }
         return rounded;
+    }
+
+    protected boolean isRecipeIdValidForType(ResourceLocation id, RecipeType<?> recipeType) {
+        if (level == null || id == null || recipeType == null) {
+            return false;
+        }
+        Optional<RecipeHolder<?>> entry = level.getRecipeManager().byKey(id);
+        return entry.isPresent() && entry.get().value().getType() == recipeType;
     }
 }
