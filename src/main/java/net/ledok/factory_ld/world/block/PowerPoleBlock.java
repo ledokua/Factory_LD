@@ -1,13 +1,16 @@
 package net.ledok.factory_ld.world.block;
 
 import net.ledok.factory_ld.world.block.entity.PowerPoleBlockEntity;
+import net.ledok.factory_ld.world.item.PowerLineToolItem;
 import net.ledok.factory_ld.world.power.PowerGridManager;
-import net.ledok.factory_ld.world.power.PowerLinkInteraction;
 import net.ledok.factory_ld.world.power.PowerNetworkManager;
 import net.minecraft.core.BlockPos;
-import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.MenuProvider;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
@@ -18,13 +21,18 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 
 public class PowerPoleBlock extends Block implements EntityBlock {
-    public PowerPoleBlock(Properties properties) {
+    private final String poleId;
+    private final int maxConnections;
+
+    public PowerPoleBlock(Properties properties, String poleId, int maxConnections) {
         super(properties);
+        this.poleId = poleId;
+        this.maxConnections = maxConnections;
     }
 
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
-        return new PowerPoleBlockEntity(pos, state);
+        return new PowerPoleBlockEntity(pos, state, poleId, maxConnections);
     }
 
     @Override
@@ -33,14 +41,32 @@ public class PowerPoleBlock extends Block implements EntityBlock {
     }
 
     @Override
+    protected ItemInteractionResult useItemOn(
+        ItemStack stack,
+        BlockState state,
+        Level level,
+        BlockPos pos,
+        Player player,
+        InteractionHand hand,
+        BlockHitResult hit
+    ) {
+        if (stack.getItem() instanceof PowerLineToolItem) {
+            return ItemInteractionResult.SKIP_DEFAULT_BLOCK_INTERACTION;
+        }
+        return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
+    }
+
+    @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
         if (level.isClientSide) {
             return InteractionResult.SUCCESS;
         }
-        if (player instanceof ServerPlayer serverPlayer) {
-            PowerLinkInteraction.handle(serverPlayer, pos);
+        BlockEntity blockEntity = level.getBlockEntity(pos);
+        if (blockEntity instanceof MenuProvider provider) {
+            player.openMenu(provider);
+            return InteractionResult.CONSUME;
         }
-        return InteractionResult.CONSUME;
+        return InteractionResult.PASS;
     }
 
     @Override

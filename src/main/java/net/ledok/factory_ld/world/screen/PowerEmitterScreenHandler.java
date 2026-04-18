@@ -1,8 +1,9 @@
 package net.ledok.factory_ld.world.screen;
 
-import net.ledok.factory_ld.registry.ModBlocks;
 import net.ledok.factory_ld.registry.ModScreenHandlers;
 import net.ledok.factory_ld.world.block.entity.PowerEmitterBlockEntity;
+import net.ledok.factory_ld.world.block.entity.PowerPoleBlockEntity;
+import net.ledok.factory_ld.world.power.PowerGridManager;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
@@ -10,23 +11,24 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerData;
 import net.minecraft.world.inventory.ContainerLevelAccess;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 
 public class PowerEmitterScreenHandler extends AbstractContainerMenu {
     private static final int POWER_SCALE = 10;
     private static final int ENERGY_SCALE = 100;
-    private final PowerEmitterBlockEntity blockEntity;
+    private final Level level;
+    private final BlockPos trackedPos;
     private final ContainerLevelAccess access;
     private final ContainerData powerData;
     private final int[] syncedValues = new int[11];
+    private final boolean clientSide;
 
     public PowerEmitterScreenHandler(int syncId, Inventory playerInventory, PowerEmitterScreenData data) {
-        this(syncId, playerInventory, resolveBlockEntity(playerInventory, data.pos()));
-    }
-
-    public PowerEmitterScreenHandler(int syncId, Inventory playerInventory, PowerEmitterBlockEntity blockEntity) {
         super(ModScreenHandlers.POWER_EMITTER, syncId);
-        this.blockEntity = blockEntity;
-        this.access = ContainerLevelAccess.create(blockEntity.getLevel(), blockEntity.getBlockPos());
+        this.level = playerInventory.player.level();
+        this.trackedPos = data.pos();
+        this.access = ContainerLevelAccess.create(level, trackedPos);
+        this.clientSide = level.isClientSide;
         this.powerData = createPowerData();
         addDataSlots(powerData);
     }
@@ -38,7 +40,14 @@ public class PowerEmitterScreenHandler extends AbstractContainerMenu {
 
     @Override
     public boolean stillValid(Player player) {
-        return stillValid(access, player, ModBlocks.POWER_EMITTER);
+        if (!player.level().equals(level)) {
+            return false;
+        }
+        if (player.distanceToSqr(trackedPos.getX() + 0.5, trackedPos.getY() + 0.5, trackedPos.getZ() + 0.5) > 64.0) {
+            return false;
+        }
+        var blockEntity = level.getBlockEntity(trackedPos);
+        return blockEntity instanceof PowerEmitterBlockEntity || blockEntity instanceof PowerPoleBlockEntity;
     }
 
     @Override
@@ -46,7 +55,7 @@ public class PowerEmitterScreenHandler extends AbstractContainerMenu {
         if (id != 0) {
             return false;
         }
-        access.execute((level, pos) -> net.ledok.factory_ld.world.power.PowerGridManager.resetGrid(level, pos));
+        access.execute(PowerGridManager::resetGrid);
         return true;
     }
 
@@ -94,22 +103,14 @@ public class PowerEmitterScreenHandler extends AbstractContainerMenu {
         return powerData.get(10);
     }
 
-    private static PowerEmitterBlockEntity resolveBlockEntity(Inventory playerInventory, BlockPos pos) {
-        var level = playerInventory.player.level();
-        if (level.getBlockEntity(pos) instanceof PowerEmitterBlockEntity emitter) {
-            return emitter;
-        }
-        throw new IllegalStateException("Power emitter block entity not found at " + pos);
-    }
-
     private ContainerData createPowerData() {
         return new ContainerData() {
             @Override
             public int get(int index) {
-                if (blockEntity.getLevel() != null && blockEntity.getLevel().isClientSide) {
+                if (clientSide) {
                     return index >= 0 && index < syncedValues.length ? syncedValues[index] : 0;
                 }
-                var stats = blockEntity.getPowerGridStats();
+                var stats = PowerGridManager.getStats(level, trackedPos);
                 return switch (index) {
                     case 0 -> scaledPower(stats.capacityMw());
                     case 1 -> scaledPower(stats.productionMw());

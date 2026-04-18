@@ -1,12 +1,17 @@
 package net.ledok.factory_ld.world.power;
 
+import net.ledok.factory_ld.config.FactoryLdConfig;
+import net.ledok.factory_ld.registry.ModNetworking;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public final class PowerNetworkManager {
@@ -16,6 +21,7 @@ public final class PowerNetworkManager {
     public enum ToggleResult {
         CONNECTED,
         DISCONNECTED,
+        TOO_FAR,
         INVALID
     }
 
@@ -27,6 +33,11 @@ public final class PowerNetworkManager {
         PowerConnectable bNode = connectableAt(level, b);
         if (aNode == null || bNode == null) {
             return ToggleResult.INVALID;
+        }
+        int maxDistance = Math.max(1, FactoryLdConfig.load().maxPowerLinkDistance());
+        double maxDistanceSq = (double) maxDistance * maxDistance;
+        if (a.distSqr(b) > maxDistanceSq) {
+            return ToggleResult.TOO_FAR;
         }
         PowerNetworkSavedData data = get(serverLevel);
         long pa = a.asLong();
@@ -41,6 +52,7 @@ public final class PowerNetworkManager {
             cleanupIfEmpty(data, pb);
             data.setDirty();
             PowerGridManager.markDirty(level, a);
+            ModNetworking.broadcastPowerLinkDelta(serverLevel, pa, pb, false);
             return ToggleResult.DISCONNECTED;
         }
 
@@ -51,6 +63,7 @@ public final class PowerNetworkManager {
         bLinks.add(pa);
         data.setDirty();
         PowerGridManager.markDirty(level, a);
+        ModNetworking.broadcastPowerLinkDelta(serverLevel, pa, pb, true);
         return ToggleResult.CONNECTED;
     }
 
@@ -72,9 +85,26 @@ public final class PowerNetworkManager {
                     data.adjacency().remove(other);
                 }
             }
+            ModNetworking.broadcastPowerLinkDelta(serverLevel, packed, other, false);
         }
         data.setDirty();
         PowerGridManager.markDirty(level, pos);
+    }
+
+    public static List<PowerLink> getLinks(ServerLevel level) {
+        PowerNetworkSavedData data = get(level);
+        List<PowerLink> links = new ArrayList<>();
+        Set<PowerLink> dedupe = new HashSet<>();
+        for (Map.Entry<Long, Set<Long>> entry : data.adjacency().entrySet()) {
+            long a = entry.getKey();
+            for (long b : entry.getValue()) {
+                PowerLink link = a <= b ? new PowerLink(a, b) : new PowerLink(b, a);
+                if (dedupe.add(link)) {
+                    links.add(link);
+                }
+            }
+        }
+        return links;
     }
 
     public static Set<Long> connectedComponent(Level level, BlockPos origin) {
@@ -139,5 +169,8 @@ public final class PowerNetworkManager {
 
     private static PowerNetworkSavedData get(ServerLevel level) {
         return level.getDataStorage().computeIfAbsent(PowerNetworkSavedData.factory(), PowerNetworkSavedData.FILE_ID);
+    }
+
+    public record PowerLink(long a, long b) {
     }
 }

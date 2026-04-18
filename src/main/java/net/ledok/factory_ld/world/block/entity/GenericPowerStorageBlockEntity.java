@@ -11,6 +11,7 @@ import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 
 public class GenericPowerStorageBlockEntity extends BlockEntity implements PowerConnectable {
     private final String storageId;
@@ -50,6 +51,11 @@ public class GenericPowerStorageBlockEntity extends BlockEntity implements Power
     @Override
     public int maxPowerConnections() {
         return 2;
+    }
+
+    @Override
+    public Vec3 powerConnectionOffset() {
+        return new Vec3(0.5, 0.85, 0.5);
     }
 
     public double capacityMj() {

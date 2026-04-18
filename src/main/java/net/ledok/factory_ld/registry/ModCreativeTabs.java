@@ -20,7 +20,9 @@ public final class ModCreativeTabs {
                     output.accept(ModBlocks.requireMachineBlock(descriptor.id()));
                 }
                 output.accept(ModBlocks.POWER_EMITTER);
-                output.accept(ModBlocks.POWER_POLE);
+                for (PowerPoleDescriptors.Descriptor descriptor : PowerPoleDescriptors.ALL) {
+                    output.accept(ModBlocks.requirePowerPoleBlock(descriptor.id()));
+                }
                 for (PowerStorageDescriptors.Descriptor descriptor : PowerStorageDescriptors.ALL) {
                     output.accept(ModBlocks.requirePowerStorageBlock(descriptor.id()));
                 }

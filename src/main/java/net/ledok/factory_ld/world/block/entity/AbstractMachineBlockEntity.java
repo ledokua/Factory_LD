@@ -19,6 +19,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.ledok.factory_ld.world.power.PowerConnectable;
 import net.ledok.factory_ld.world.power.PowerGridManager;
 import net.ledok.factory_ld.world.power.PowerUnits;
+import net.minecraft.world.phys.Vec3;
 
 public abstract class AbstractMachineBlockEntity extends BlockEntity implements ImplementedInventory, OverclockMachineEntity, PowerConnectable {
     protected final NonNullList<ItemStack> items;
@@ -104,6 +105,11 @@ public abstract class AbstractMachineBlockEntity extends BlockEntity implements 
     @Override
     public int maxPowerConnections() {
         return 1;
+    }
+
+    @Override
+    public Vec3 powerConnectionOffset() {
+        return new Vec3(0.5, 0.9, 0.5);
     }
 
     public int getShardCount() {

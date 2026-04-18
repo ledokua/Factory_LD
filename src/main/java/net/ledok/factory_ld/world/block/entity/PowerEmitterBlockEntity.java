@@ -17,6 +17,7 @@ import net.ledok.factory_ld.world.power.PowerConnectable;
 import net.ledok.factory_ld.world.power.PowerGridManager;
 import net.ledok.factory_ld.world.power.PowerGridStats;
 import net.ledok.factory_ld.world.power.PowerUnits;
+import net.minecraft.world.phys.Vec3;
 
 public class PowerEmitterBlockEntity extends BlockEntity implements ExtendedScreenHandlerFactory<PowerEmitterScreenData>, PowerConnectable {
     private static final double OUTPUT_MW = 30.0;
@@ -62,6 +63,11 @@ public class PowerEmitterBlockEntity extends BlockEntity implements ExtendedScre
         return 1;
     }
 
+    @Override
+    public Vec3 powerConnectionOffset() {
+        return new Vec3(0.5, 0.9, 0.5);
+    }
+
     public PowerGridStats getPowerGridStats() {
         if (level == null) {
             return PowerGridStats.EMPTY;
@@ -81,6 +87,6 @@ public class PowerEmitterBlockEntity extends BlockEntity implements ExtendedScre
 
     @Override
     public AbstractContainerMenu createMenu(int syncId, Inventory playerInventory, Player player) {
-        return new PowerEmitterScreenHandler(syncId, playerInventory, this);
+        return new PowerEmitterScreenHandler(syncId, playerInventory, new PowerEmitterScreenData(worldPosition));
     }
 }
