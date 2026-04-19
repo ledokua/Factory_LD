@@ -77,17 +77,28 @@ public final class PowerGridManager {
     }
 
     public static void markDirty(Level level, BlockPos changedPos) {
-        if (level == null) {
+        if (level == null || changedPos == null) {
             return;
         }
         LevelState levelState = STATES.get(level);
         if (levelState == null) {
             return;
         }
-        levelState.runtimes.clear();
-        levelState.gridSnapshotsByKey.clear();
-        levelState.gridKeyByPos.clear();
-        levelState.trippedGrids.clear();
+        long changedPacked = changedPos.asLong();
+        Long gridKey = levelState.gridKeyByPos.get(changedPacked);
+        if (gridKey != null) {
+            invalidateSnapshot(levelState, gridKey, levelState.gridSnapshotsByKey.get(gridKey));
+            levelState.trippedGrids.remove(gridKey);
+            return;
+        }
+
+        for (Map.Entry<Long, GridSnapshot> entry : new ArrayList<>(levelState.gridSnapshotsByKey.entrySet())) {
+            GridSnapshot snapshot = entry.getValue();
+            if (snapshot != null && snapshot.nodePositions().contains(changedPacked)) {
+                invalidateSnapshot(levelState, entry.getKey(), snapshot);
+                levelState.trippedGrids.remove(entry.getKey());
+            }
+        }
     }
 
     private static GridSnapshot scanGrid(Level level, BlockPos origin) {

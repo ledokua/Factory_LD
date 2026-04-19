@@ -33,6 +33,15 @@ public final class FactoryLdConfig {
         return maxPowerLinkDistance;
     }
 
+    public static void invalidateCache() {
+        cached = null;
+    }
+
+    public static FactoryLdConfig reload() {
+        invalidateCache();
+        return load();
+    }
+
     public static FactoryLdConfig load() {
         FactoryLdConfig existing = cached;
         if (existing != null) {

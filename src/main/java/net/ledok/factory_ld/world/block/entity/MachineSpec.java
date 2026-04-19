@@ -4,7 +4,6 @@ public record MachineSpec(
     String id,
     String recipeTypeId,
     double basePowerMw,
-    double energyCapacityMj,
     int itemInputSlots,
     int itemOutputSlots,
     boolean overclockEnabled,
@@ -21,9 +20,6 @@ public record MachineSpec(
         }
         if (basePowerMw < 0.0) {
             throw new IllegalArgumentException("Base power must be >= 0");
-        }
-        if (energyCapacityMj <= 0.0) {
-            throw new IllegalArgumentException("Energy capacity must be > 0");
         }
         if (itemInputSlots < 0 || itemOutputSlots < 0) {
             throw new IllegalArgumentException("Item slot counts must be >= 0");

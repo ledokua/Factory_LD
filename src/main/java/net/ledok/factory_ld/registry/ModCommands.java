@@ -3,6 +3,7 @@ package net.ledok.factory_ld.registry;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.ledok.factory_ld.config.FactoryLdConfig;
 import net.ledok.factory_ld.world.player.PlayerOverclockAccess;
 import net.ledok.factory_ld.world.research.ResearchManager;
 import net.minecraft.commands.CommandSourceStack;
@@ -43,6 +44,8 @@ public final class ModCommands {
         dispatcher.register(
             Commands.literal("factoryld")
                 .requires(source -> source.hasPermission(2))
+                .then(Commands.literal("reloadconfig")
+                    .executes(context -> reloadConfig(context.getSource())))
                 .then(Commands.literal("overclock")
                     .then(Commands.literal("unlock")
                         .then(Commands.argument("targets", EntityArgument.players())
@@ -190,5 +193,16 @@ public final class ModCommands {
         String state = unlocked ? "unlocked" : "locked";
         source.sendSuccess(() -> Component.literal("Overclock " + state + " for " + players.size() + " player(s)."), true);
         return players.size();
+    }
+
+    private static int reloadConfig(CommandSourceStack source) {
+        FactoryLdConfig config = FactoryLdConfig.reload();
+        source.sendSuccess(
+            () -> Component.literal(
+                "Factory_LD config reloaded. maxPowerLinkDistance=" + config.maxPowerLinkDistance()
+            ),
+            true
+        );
+        return 1;
     }
 }

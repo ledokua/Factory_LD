@@ -167,17 +167,25 @@ public final class ResearchManager {
     }
 
     private static void ensureDefaults(ServerLevel level, ResearchSavedData data) {
-        if (!data.getGlobalUnlocked().isEmpty()) {
+        if (!data.getGlobalUnlocked().isEmpty() || !data.getGlobalUnlockedGroups().isEmpty()) {
             return;
         }
+
+        boolean changed = false;
         FactoryLdConfig config = FactoryLdConfig.load();
         for (String group : config.defaultUnlockedGroups()) {
-            data.getGlobalUnlockedGroups().add(group);
+            if (data.getGlobalUnlockedGroups().add(group)) {
+                changed = true;
+            }
         }
         if (data.getGlobalUnlocked().isEmpty() && data.getGlobalUnlockedGroups().isEmpty()) {
-            data.getGlobalUnlocked().add(FactoryLdMod.id("constructor_iron_plates").toString());
+            if (data.getGlobalUnlocked().add(FactoryLdMod.id("constructor_iron_plates").toString())) {
+                changed = true;
+            }
         }
-        data.setDirty();
+        if (changed) {
+            data.setDirty();
+        }
     }
 
     private static java.util.stream.Stream<RecipeHolder<?>> allRecipes(ServerLevel level) {
